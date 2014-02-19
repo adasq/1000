@@ -1,2 +1,4 @@
 based on google chrome extension
-zmiana do readme
+line added by f01
+line added by f01 2
+asasdasd
