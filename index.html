@@ -1,0 +1,84 @@
+<html>
+
+<head>
+
+<script src="lib/jquery-1.10.2.min.js"></script>
+<script src="lib/Enums.js"></script>
+<script src="lib/RoundCardSet.js"></script>
+<script src="lib/PointsManager.js"></script>
+<script src="lib/Player.js"></script>
+<script src="lib/Card.js"></script>
+<script src="lib/WinCardSet.js"></script>
+<script src="lib/CardSet.js"></script>
+<script src="lib/CardFactory.js"></script>
+<script src="lib/Round.js"></script>
+<script src="lib/GameTable.js"></script>
+<script src="lib/Battle.js"></script>
+
+<link rel="stylesheet" type="text/css" href="css/styles.css">
+</head>
+
+
+<body>
+
+<script>
+
+function getCardElem(card, gameTable){
+
+var template = "<div class=\"card\">"+card.toString()+"</div>";
+var elem =  $(template);
+	elem.on('click',function(){
+	
+		
+	var result= gameTable.currentRound.throwCardAsPlayer(card.cardId, card.cardOwner.playerId);	 
+	console.log(BattleState.getMessageByBattleState(result.type));
+	
+	if(result.error){		
+		return;
+	}else{
+		elem.remove();
+	}
+	if(gameTable.currentRound.isBattleFinished()){
+		gameTable.currentRound.calculateBattleResult();
+		if(gameTable.currentRound.isRoundFinished()){			
+				gameTable.calculateRoundResult();
+				console.log("KONIEC RUNDY !!!!!!!!!!!!!");
+				
+		}else{
+				gameTable.currentRound.initialNewBattle();
+				console.log("!!!!!!!!!!");
+		}		
+	}else{
+		gameTable.changeTurn();
+	}
+	});
+return elem;
+
+}
+//create game table:
+var gameTable= new GameTable();
+//add players:
+gameTable.addPlayer(new Player("adam"));
+gameTable.addPlayer(new Player("andrzej"));
+gameTable.addPlayer(new Player("xxx"));
+
+//init first round:
+gameTable.initNewRound();
+
+
+
+for(var i=0;i<gameTable.totalPlayers;++i){
+	 var array = gameTable.getPlayerById(i+1).roundCardSet.getCards();
+	 for(var j=0;j<array.length;++j){
+		$('body').append(getCardElem(array[j], gameTable));
+	 }
+ $('body').append( '<div style="clear: both"></div>');
+}
+ 
+
+ 
+
+
+</script>
+</body>
+</html>
