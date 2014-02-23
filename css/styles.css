@@ -1,36 +1,63 @@
 body{
 background-color: #C5C5C5;
 }
-
-
-
-.card{
- width: 70px;
- height: 90px;
- margin: 2px;
- float: left;
- background-color: #F9F9F9;
-border-radius: 15px;
-padding: 10px;
+ 
+.mini{
+    position: relative !important;
 }
 
-
-.heart {
-    position: relative;
-    width: 100px;
-    height: 90px;
+.card{ 
+border: 1px solid #E9E9E9;
+	font-family: "Arial";
+	font-size: 50px;
+	position: absolute;
+	width: 250px;
+	height: 350px;
+	border-radius: 20px; 
+	background-color: white;
+	-webkit-box-shadow: 2px 2px 4px 0px rgba(50, 50, 50, 0.23);
+	
 }
+*{
+padding: 0;
+margin:0;
+}
+
+.card-inner-top{
+padding-top: 3px;
+padding-left: 10px; 
+height: 20%;
+border-radius: 20px 20px 0px 0px  ; 
+ 
+}
+
+.card-inner-top div{
+width: 25%;
+height:100%; 
+}
+
+.card-inner{
+height: 60%; 
+}
+.type{
+width: 100px;
+height: 100px; 
+margin: 0 auto;
+top: 30%;
+position: relative;
+}
+
 .heart:before,
 .heart:after {
     position: absolute;
     content: "";
-    left: 25px;
+    left: 50px;
     top: 0;
-    width: 25px;
-    height: 40px;
+    width: 50px;
+    height: 80px;
     background: red;
-    -moz-border-radius: 25px 25px 0 0;
-    border-radius: 25px 25px 0 0;
+    -moz-border-radius: 50px 50px 0 0;
+    border-radius: 50px 50px 0 0;
     -webkit-transform: rotate(-45deg);
        -moz-transform: rotate(-45deg);
         -ms-transform: rotate(-45deg);
@@ -55,3 +82,80 @@ padding: 10px;
          -o-transform-origin: 100% 100%;
             transform-origin :100% 100%;
 }
+
+ 
+.rotated{
+-webkit-transform: rotateZ(180deg);
+}
+
+
+
+.real{
+  -webkit-perspective:  300px ;
+  -webkit-transform: rotateX( 50deg ) rotateZ( 11deg );
+}
+
+#table{ 
+float: right;
+width: 1300px; 
+height: 900px;  
+background-color: #aaa;
+}
+#players{
+    width: 1100px; 
+    float: left; 
+    overflow: auto;
+}
+
+.left, .right{
+top: 20%;
+}
+.bottom, .top{
+left: 600px;
+}
+
+
+.left{
+left: -300px;
+}
+
+.right{
+left: 1400px;
+}
+
+.bottom{
+top: 600px;
+}
+
+.top{
+top: -400px;
+}
+
+
+
+#players ul{
+    height: 200px;
+    margin: 0px;
+
+}
+#players ul li{
+ height: 200px;
+ overflow: hidden; 
+}
+
+
+
+.hearts{
+    background-image: url('../img/hearts.png');
+}
+.diamonds{
+    background-image: url('../img/diamonds.png');
+}
+.clubs{
+    background-image: url('../img/clubs.png');
+}
+.spades{
+   background-image: url('../img/spades.png'); 
+}
+
+
