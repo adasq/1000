@@ -55,7 +55,7 @@
                 elem.on('click', function() {
                     //====================================================================
                     var result = gameTable.currentRound.throwCardAsPlayer(card.cardId, card.cardOwner.playerId);
-                                console.log(BattleState.getMessageByBattleState(result.type));
+                                //console.log(BattleState.getMessageByBattleState(result.type));
                     if (result.error) {
                         return -1;
                     }   
@@ -87,27 +87,30 @@ animator.throwCard(elem, function() {
                     if (gameTable.currentRound.isBattleFinished()) {
                         //bitwa zakonczona
                         gameTable.currentRound.handleFinishedBattle();
-                        animator.removeFromTable(gameTable.currentRound.currentBattle.winner.playerLocation, function(){
-            
-                        });				
-                        
-                        if (gameTable.currentRound.isRoundFinished()) {
-                            //runda skonczona
-                            console.log("KONIEC RUNDY");
-                            gameTable.handleFinishedRound();
-                            nextRound(gameTable);
-                        } else {
-                            //runda nie skonczona skonczona
-                            gameTable.currentRound.initialNewBattle();
-                        }
+                      
+                           animator.removeFromTable(gameTable.currentRound.currentBattle.winner.playerLocation, function(){
+                               alert(gameTable, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                                    if (gameTable.currentRound.isRoundFinished()) {
+                                                   //runda skonczona
+                                                   console.log("KONIEC RUNDY");
+                                                   gameTable.handleFinishedRound();
+                                                   nextRound(gameTable);
+                                               } else {
+                                                   //runda nie skonczona skonczona
+                                                   console.log("KONIEC BITWY");
+                                                   gameTable.currentRound.initialNewBattle();
+                                                    
+                                               }
+                        });			
+
                     } else {
                         //bitwa nie zakonczona
                         gameTable.changeTurn();
                     }
 });
-                    
-                    var currentBattle = gameTable.currentRound.currentBattle;
-                    currentBattleElem.text("wygral bitwe " + currentBattle.winner.playerName + ": " + currentBattle.toString());
+            /*        
+                 var currentBattle = gameTable.currentRound.currentBattle;
+                  currentBattleElem.text("wygral bitwe " + currentBattle.winner.playerName + ": " + currentBattle.toString());
                     for (var i = 0; i < gameTable.totalPlayers; ++i) {
                         var player = gameTable.getPlayerById(i + 1);
                         var elem2 = $('#player-' + player.playerName);
@@ -115,8 +118,11 @@ animator.throwCard(elem, function() {
                         elem2.text(player.toString());
                     }
                     $('#player-' + gameTable.currentPlayer.playerName).addClass("turn");
-                });//====================================================================
-                return elem;
+                */ 
+        });//====================================================================
+              
+        
+        return elem;
             }
             //create game table:
             var gameTable = new GameTable();
@@ -129,6 +135,7 @@ animator.throwCard(elem, function() {
 
 
             var nextRound = function(gameTable) {
+                $('#players >').remove();
                 gameTable.initNewRound();
                 for (var i = 0; i < gameTable.totalPlayers; ++i) {
                     var player = gameTable.getPlayerById(i + 1);
@@ -144,7 +151,7 @@ animator.throwCard(elem, function() {
 
             }
             nextRound(gameTable);
- animator = throwAnimator('#table');
+            animator = throwAnimator('#table');
 
 
         </script>
