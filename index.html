@@ -3,6 +3,8 @@
     <head>
         <title>1000 card game</title>
         <script src="lib/jquery-1.10.2.min.js"></script>
+
+        <script src="lib/underscore-min.js"></script>
         <script src="lib/Enums.js"></script>
         <script src="lib/RoundCardSet.js"></script>
         <script src="lib/PointsManager.js"></script>
@@ -14,20 +16,44 @@
         <script src="lib/Round.js"></script>
         <script src="lib/GameTable.js"></script>
         <script src="lib/Battle.js"></script>
-         <script src="lib/ThrowAnimator.js"></script>
-        
+        <script src="lib/ThrowAnimator.js"></script>
+
 
         <link rel="stylesheet" type="text/css" href="css/styles.css">
+        <!-- ===========================================================   TEMPLATES -->
+        <script type="text/template" id="card-template">
+            <div id="<%- cardId %>" class="mini card" >
+              <div class="hidden-side"></div>
+            <div class="card-inner-top">
+            <div class="number"><%= Shape.getNameByShapeId(cardShape) %></div>
+           <div class="small-type <%= Color.getNameByColorId(cardColor) %>"></div>
+            </div>
+            <div class="card-inner"><div class="type <%= Color.getNameByColorId(cardColor) %>">
+            </div></div><div class="card-inner-top rotated">
+            <div class="number"><%= Shape.getNameByShapeId(cardShape) %></div>
+           <div class="small-type <%= Color.getNameByColorId(cardColor) %>"></div>
+            </div>
+        </script>
+        <!-- ===========================================================   TEMPLATES -->
+        <script type="text/html" id="player-card-list">
+                <% _.each(players,function(item,key,list){ %>
+                    
+                        <div class="player-name"><%=  item.playerName %>    <input class="<%= item.playerName  %>" value="100" type="text"/></div>
+           <ul  id='player-<%= item.playerName %>'>  
+         
+                </ul> 
+     
+                <% }); %>
+     
 
-        <style>
-            .turn{
-                background-color: green;
-            }
+        </script>
+        <!-- ===========================================================   TEMPLATES -->
+        <script type="text/html" id="prickup-cards">
+  
+             <div> <%- cards[0].toString() %> <%- cards[1].toString() %> <%- cards[2].toString() %> </div>
 
-
-
-
-        </style>
+        </script>
+        <!-- ===========================================================   TEMPLATES -->
 
 
     </head>
@@ -35,128 +61,173 @@
 
 
     <body>
+
+
         <div id="players"></div>
+        <button id="play">jhk</button>
         <div id="table"></div>
+
+
         <script>
-            
-            var animator;
-            function getCardElem(card, gameTable) {
+//==============================================================================
 
-                var template = '<div id="' + card.cardId + '" class="mini card">' +
-                        '<div class="card-inner-top">' +
-                        '<div>' + Shape.getNameByShapeId(card.cardShape) + '</div>' +
-                        '</div>' +
-                        '<div class="card-inner">' +
-                        '<div class="type '+Color.getNameByColorId(card.cardColor)+'"></div>' +
-                        '</div>' +
-                        '<div class="card-inner-top rotated"><div>' + Shape.getNameByShapeId(card.cardShape) + '</div></div>' +
-                        '</div>';
-                var elem = $(template);
-                elem.on('click', function() {
-                    //====================================================================
-                    var result = gameTable.currentRound.throwCardAsPlayer(card.cardId, card.cardOwner.playerId);
-                                //console.log(BattleState.getMessageByBattleState(result.type));
-                    if (result.error) {
-                        return -1;
-                    }   
-                        var pploc = {};
-                        var className;
-                        switch(card.cardOwner.playerLocation){
-                            case  PlayerPossition.TOP:
-                                pploc = animator.playersLoc.top;
-                                className = 'top';
-                                break;
-                            case  PlayerPossition.RIGHT:
-                                pploc = animator.playersLoc.right;
-                                className = 'right';
-                                break;
-                            case  PlayerPossition.BOTTOM:
-                                pploc = animator.playersLoc.bottom;
-                                className = 'bottom';
-                                break;
-                            case  PlayerPossition.LEFT:
-                                pploc = animator.playersLoc.left;
-                                className = 'left';
-                                break;         
-                        };
-  
-                        elem.removeClass("mini").addClass("real").addClass(className).css(pploc);
-animator.throwCard(elem, function() {
+$("#play").on('click',function(){
 
-
-                    if (gameTable.currentRound.isBattleFinished()) {
-                        //bitwa zakonczona
-                        gameTable.currentRound.handleFinishedBattle();
-                      
-                           animator.removeFromTable(gameTable.currentRound.currentBattle.winner.playerLocation, function(){
-                               alert(gameTable, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                                    if (gameTable.currentRound.isRoundFinished()) {
-                                                   //runda skonczona
-                                                   console.log("KONIEC RUNDY");
-                                                   gameTable.handleFinishedRound();
-                                                   nextRound(gameTable);
-                                               } else {
-                                                   //runda nie skonczona skonczona
-                                                   console.log("KONIEC BITWY");
-                                                   gameTable.currentRound.initialNewBattle();
-                                                    
-                                               }
-                        });			
-
-                    } else {
-                        //bitwa nie zakonczona
-                        gameTable.changeTurn();
-                    }
-});
-            /*        
-                 var currentBattle = gameTable.currentRound.currentBattle;
-                  currentBattleElem.text("wygral bitwe " + currentBattle.winner.playerName + ": " + currentBattle.toString());
-                    for (var i = 0; i < gameTable.totalPlayers; ++i) {
-                        var player = gameTable.getPlayerById(i + 1);
-                        var elem2 = $('#player-' + player.playerName);
-                        elem2.removeClass("turn");
-                        elem2.text(player.toString());
-                    }
-                    $('#player-' + gameTable.currentPlayer.playerName).addClass("turn");
-                */ 
-        });//====================================================================
-              
+    
+    var winningPlayer = null, value = 0;
+    
+    _.each(gameTable.players, function(player){
+     
+        var currentValue = $("."+player.playerName).val();
         
-        return elem;
-            }
-            //create game table:
-            var gameTable = new GameTable();
-            //add players:
-            gameTable.addPlayer(new Player("adam", PlayerPossition.BOTTOM));
-            gameTable.addPlayer(new Player("andrzej", PlayerPossition.LEFT));
-            gameTable.addPlayer(new Player("xxx", PlayerPossition.RIGHT));
-            //init first round:
+        if( currentValue > value){
+            value = currentValue;
+            winningPlayer = player;
+        }
+       
+    });
+    shopPrikup();
+     _.each(gameTable.currentRound.prikup.getCards(), function(card){
+                 winningPlayer.roundCardSet.addCard(card);     
+        });
+       
+    animator.removeFromTable(winningPlayer.playerLocation, function(){
+        
+        
+    })
+      
+    
+});
+
+var animate = function(elem) {
+    var deg = 180, 
+            timeout = 10, 
+            transformValue = "rotateX( 40deg ) rotateZ( 15deg )  rotateY({{deg}}deg)",
+            handle = function() {
+        if (deg > 0) {
+            deg -= 2;
+            $(elem).css("-webkit-transform", transformValue.replace("{{deg}}", deg));
+            setTimeout(handle, timeout);
+        }
+        if (deg == 102) {
+            $(elem).removeClass("hidden-card");
+        }
+
+    };
+    setTimeout(handle, timeout);
+};
+var shopPrikup = function() {
+    _.each($('.prikup'), function(elem) {
+        animate(elem);
+    })
+};
+var initNewRound = function(gameTable) {
+    $('#players >').remove();
+    gameTable.initNewRound();
+
+    var elems = [];
+    _.each(gameTable.currentRound.prikup.getCards(), function(card, i) {
+        var template = _.template($("#card-template").html());
+        elems.push($(template(card)));
+    });
+
+    animator.addPrickup(elems);
 
 
+    var template = _.template($('#player-card-list').html());
+    $('#players').append($(template({players: gameTable.players})));
 
-            var nextRound = function(gameTable) {
-                $('#players >').remove();
-                gameTable.initNewRound();
-                for (var i = 0; i < gameTable.totalPlayers; ++i) {
-                    var player = gameTable.getPlayerById(i + 1);
-                    var playerList = $("<ul style='' id='player-" + player.playerName + "'></ul>");
-                    $('#players').append(playerList);
-                    var array = gameTable.getPlayerById(i + 1).roundCardSet.getCards();
-                    for (var j = 0; j < array.length; ++j) {
-                        var item = $("<li style=' width: 150px; float: left;'></li>");
-                        item.append(getCardElem(array[j], gameTable));
-                        playerList.append(item);
+    for (var i = 0; i < gameTable.totalPlayers; ++i) {
+        var player = gameTable.getPlayerById(i + 1);
+        var playerList = $('#player-' + player.playerName);
+        var array = gameTable.getPlayerById(i + 1).roundCardSet.getCards();
+        for (var j = 0; j < array.length; ++j) {
+            var item = $("<li style=' width: 150px; float: left;'></li>");
+            item.append(getCardElem(array[j], gameTable));
+            playerList.append(item);
+        }
+    }
+};
+//==============================================================================
+var setCardPositionByUserPosition = function(elem, playerLocation) {
+    var pploc = {};
+    var className;
+    switch (playerLocation) {
+        case  PlayerPossition.TOP:
+            pploc = animator.playersLoc.top;
+            className = 'top';
+            break;
+        case  PlayerPossition.RIGHT:
+            pploc = animator.playersLoc.right;
+            className = 'right';
+            break;
+        case  PlayerPossition.BOTTOM:
+            pploc = animator.playersLoc.bottom;
+            className = 'bottom';
+            break;
+        case  PlayerPossition.LEFT:
+            pploc = animator.playersLoc.left;
+            className = 'left';
+            break;
+    }
+    ;
+    elem.addClass(className).css(pploc);
+};
+//==============================================================================
+var getCardElem = function(card, gameTable) {
+    //create Card Elem:
+    var template = _.template($("#card-template").html());
+    var cardTemplate = template(card);
+    var elem = $(cardTemplate);
+    //add card action:
+    elem.on('click', function() {
+        var result = gameTable.currentRound.throwCardAsPlayer(card.cardId, card.cardOwner.playerId);
+        if (result.error) {
+            return -1;
+        }
+        setCardPositionByUserPosition(elem, card.cardOwner.playerLocation);
+
+        elem.removeClass("mini").addClass("real");
+        animator.throwCard(elem, function() {
+            if (gameTable.currentRound.isBattleFinished()) {
+                //bitwa zakonczona
+                gameTable.currentRound.handleFinishedBattle();
+                animator.removeFromTable(gameTable.currentRound.currentBattle.winner.playerLocation, function() {
+                    if (gameTable.currentRound.isRoundFinished()) {
+                        console.log("KONIEC RUNDY");
+                        gameTable.handleFinishedRound();
+                        initNewRound(gameTable);
+                    } else {
+                        console.log("KONIEC BITWY");
+                        console.log(gameTable.currentRound.currentBattle.toString());
+                        gameTable.currentRound.initialNewBattle();
                     }
-                }
+                });
 
+            } else {
+                gameTable.changeTurn();
             }
-            nextRound(gameTable);
-            animator = throwAnimator('#table');
+        });
+
+    });
+    return elem;
+}//getCardElem
+//==============================================================================
+var tableElem = $('#table');
+
+//create game table:
+var gameTable = new GameTable();
+//add players:
+gameTable.addPlayer(new Player("adam", PlayerPossition.BOTTOM));
+gameTable.addPlayer(new Player("andrzej", PlayerPossition.LEFT));
+gameTable.addPlayer(new Player("xxx", PlayerPossition.RIGHT));
+//init first round:
+
+//card throw animation handler
+var animator = throwAnimator(tableElem);
+initNewRound(gameTable);
 
 
         </script>
-
-
-
     </body>
 </html>
