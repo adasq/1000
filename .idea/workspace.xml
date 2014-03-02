@@ -1,0 +1,733 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="f368754d-1cff-4ddd-be4a-81a7111d1539" name="Default" comment="" />
+    <ignored path="nazas.iws" />
+    <ignored path=".idea/workspace.xml" />
+    <option name="TRACKING_ENABLED" value="true" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ChangesViewManager" flattened_view="true" show_ignored="false" />
+  <component name="CreatePatchCommitExecutor">
+    <option name="PATCH_PATH" value="" />
+  </component>
+  <component name="DaemonCodeAnalyzer">
+    <disable_hints />
+  </component>
+  <component name="ExecutionTargetManager" SELECTED_TARGET="default_target" />
+  <component name="FavoritesManager">
+    <favorites_list name="nazas" />
+  </component>
+  <component name="FileEditorManager">
+    <leaf>
+      <file leaf-file-name="manifest.json" pinned="false" current="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/manifest.json">
+          <provider selected="true" editor-type-id="text-editor">
+            <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="-0.0" vertical-offset="0" max-vertical-offset="612">
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="options.html" pinned="false" current="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/options.html">
+          <provider selected="true" editor-type-id="text-editor">
+            <state line="59" column="34" selection-start="1650" selection-end="1650" vertical-scroll-proportion="-7.8461537" vertical-offset="799" max-vertical-offset="1938">
+              <folding>
+                <marker date="1392385829801" expanded="false" signature="1442:1494" placeholder="..." />
+                <marker date="1392385829801" expanded="true" signature="1495:2786" placeholder="..." />
+                <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+                <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+                <marker date="1392385829801" expanded="true" signature="1568:1726" placeholder="..." />
+                <marker date="1392385829801" expanded="true" signature="1811:1880" placeholder="..." />
+                <marker date="1392385829801" expanded="true" signature="1959:2027" placeholder="..." />
+                <marker date="1392385829801" expanded="true" signature="2090:2175" placeholder="..." />
+                <marker date="1392385829801" expanded="false" signature="2227:2305" placeholder="..." />
+                <marker date="1392385829801" expanded="true" signature="2507:2579" placeholder="..." />
+                <marker date="1392385829801" expanded="true" signature="2551:2573" placeholder="..." />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="background.js" pinned="false" current="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/background.js">
+          <provider selected="true" editor-type-id="text-editor">
+            <state line="106" column="0" selection-start="3139" selection-end="3139" vertical-scroll-proportion="0.0" vertical-offset="1257" max-vertical-offset="2159">
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="todos.js" pinned="false" current="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/todos.js">
+          <provider selected="true" editor-type-id="text-editor">
+            <state line="126" column="47" selection-start="3210" selection-end="3210" vertical-scroll-proportion="0.0" vertical-offset="1606" max-vertical-offset="5491">
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="styles.css" pinned="false" current="true" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/css/styles.css">
+          <provider selected="true" editor-type-id="text-editor">
+            <state line="37" column="18" selection-start="483" selection-end="483" vertical-scroll-proportion="0.41898733" vertical-offset="298" max-vertical-offset="3077">
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="backbone.localStorage.js" pinned="false" current="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/backbone.localStorage.js">
+          <provider selected="true" editor-type-id="text-editor">
+            <state line="59" column="76" selection-start="2232" selection-end="2232" vertical-scroll-proportion="0.0" vertical-offset="1003" max-vertical-offset="4046">
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+    </leaf>
+  </component>
+  <component name="FindManager">
+    <FindUsagesManager>
+      <setting name="OPEN_NEW_TAB" value="false" />
+    </FindUsagesManager>
+  </component>
+  <component name="IdeDocumentHistory">
+    <option name="changedFiles">
+      <list>
+        <option value="$PROJECT_DIR$/options.js" />
+        <option value="$PROJECT_DIR$/backbone.localStorage.js" />
+        <option value="$PROJECT_DIR$/background.js" />
+        <option value="$PROJECT_DIR$/todos.js" />
+        <option value="$PROJECT_DIR$/options.html" />
+        <option value="$PROJECT_DIR$/css/styles.css" />
+      </list>
+    </option>
+  </component>
+  <component name="ProjectFrameBounds">
+    <option name="x" value="-8" />
+    <option name="y" value="-8" />
+    <option name="width" value="1296" />
+    <option name="height" value="1000" />
+  </component>
+  <component name="ProjectLevelVcsManager" settingsEditedManually="false">
+    <OptionsSetting value="true" id="Add" />
+    <OptionsSetting value="true" id="Remove" />
+    <OptionsSetting value="true" id="Checkout" />
+    <OptionsSetting value="true" id="Update" />
+    <OptionsSetting value="true" id="Status" />
+    <OptionsSetting value="true" id="Edit" />
+    <ConfirmationsSetting value="0" id="Add" />
+    <ConfirmationsSetting value="0" id="Remove" />
+  </component>
+  <component name="ProjectReloadState">
+    <option name="STATE" value="0" />
+  </component>
+  <component name="ProjectView">
+    <navigator currentView="ProjectPane" proportions="" version="1" splitterProportion="0.5">
+      <flattenPackages />
+      <showMembers />
+      <showModules />
+      <showLibraryContents />
+      <hideEmptyPackages />
+      <abbreviatePackageNames />
+      <autoscrollToSource />
+      <autoscrollFromSource />
+      <sortByType />
+    </navigator>
+    <panes>
+      <pane id="ProjectPane">
+        <subPane>
+          <PATH>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="nazas" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode" />
+            </PATH_ELEMENT>
+          </PATH>
+          <PATH>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="nazas" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="nazas" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+          </PATH>
+          <PATH>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="nazas" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="nazas" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="css" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+          </PATH>
+        </subPane>
+      </pane>
+      <pane id="Scope" />
+    </panes>
+  </component>
+  <component name="PropertiesComponent">
+    <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="FullScreen" value="false" />
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Dropbox\WS_workspace\nazas" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Dropbox\WS_workspace\nazas" />
+    </key>
+  </component>
+  <component name="RunManager">
+    <configuration default="true" type="DartUnitRunConfigurationType" factoryName="DartUnit">
+      <option name="VMOptions" />
+      <option name="arguments" />
+      <option name="filePath" />
+      <option name="scope" value="ALL" />
+      <option name="testName" />
+      <method />
+    </configuration>
+    <configuration default="true" type="DartCommandLineRunConfigurationType" factoryName="Dart Command Line Application">
+      <option name="VMOptions" />
+      <option name="arguments" />
+      <option name="filePath" />
+      <option name="name" value="Dart" />
+      <option name="saveOutputToFile" value="false" />
+      <option name="showConsoleOnStdErr" value="false" />
+      <option name="showConsoleOnStdOut" value="false" />
+      <method />
+    </configuration>
+    <configuration default="true" type="JSTestDriver:ConfigurationType" factoryName="JsTestDriver">
+      <setting name="configLocationType" value="CONFIG_FILE" />
+      <setting name="settingsFile" value="" />
+      <setting name="serverType" value="INTERNAL" />
+      <setting name="preferredDebugBrowser" value="CHROME" />
+      <method />
+    </configuration>
+    <configuration default="true" type="JavaScriptTestRunnerKarma" factoryName="Karma" singleton="true" config-file="">
+      <envs />
+      <method />
+    </configuration>
+    <configuration default="true" type="JavascriptDebugType" factoryName="JavaScript Debug" singleton="true">
+      <method />
+    </configuration>
+    <configuration default="true" type="NodeJSConfigurationType" factoryName="Node.js" working-dir="">
+      <browser start="false" url="" with-js-debugger="false" />
+      <method />
+    </configuration>
+    <list size="0" />
+  </component>
+  <component name="ShelveChangesManager" show_recycled="false" />
+  <component name="SvnConfiguration" maxAnnotateRevisions="500" myUseAcceleration="nothing" myAutoUpdateAfterCommit="false" cleanupOnStartRun="false" SSL_PROTOCOLS="all">
+    <option name="USER" value="" />
+    <option name="PASSWORD" value="" />
+    <option name="mySSHConnectionTimeout" value="30000" />
+    <option name="mySSHReadTimeout" value="30000" />
+    <option name="LAST_MERGED_REVISION" />
+    <option name="MERGE_DRY_RUN" value="false" />
+    <option name="MERGE_DIFF_USE_ANCESTRY" value="true" />
+    <option name="UPDATE_LOCK_ON_DEMAND" value="false" />
+    <option name="IGNORE_SPACES_IN_MERGE" value="false" />
+    <option name="CHECK_NESTED_FOR_QUICK_MERGE" value="false" />
+    <option name="IGNORE_SPACES_IN_ANNOTATE" value="true" />
+    <option name="SHOW_MERGE_SOURCES_IN_ANNOTATE" value="true" />
+    <option name="FORCE_UPDATE" value="false" />
+    <option name="IGNORE_EXTERNALS" value="false" />
+    <myIsUseDefaultProxy>false</myIsUseDefaultProxy>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="f368754d-1cff-4ddd-be4a-81a7111d1539" name="Default" comment="" />
+      <created>1392231871898</created>
+      <updated>1392231871898</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TodoView" selected-index="0">
+    <todo-panel id="selected-file">
+      <are-packages-shown value="false" />
+      <are-modules-shown value="false" />
+      <flatten-packages value="false" />
+      <is-autoscroll-to-source value="false" />
+    </todo-panel>
+    <todo-panel id="all">
+      <are-packages-shown value="false" />
+      <are-modules-shown value="false" />
+      <flatten-packages value="false" />
+      <is-autoscroll-to-source value="false" />
+    </todo-panel>
+    <todo-panel id="default-changelist">
+      <are-packages-shown value="false" />
+      <are-modules-shown value="false" />
+      <flatten-packages value="false" />
+      <is-autoscroll-to-source value="false" />
+    </todo-panel>
+  </component>
+  <component name="ToolWindowManager">
+    <frame x="-8" y="-8" width="1296" height="1000" extended-state="7" />
+    <editor active="true" />
+    <layout>
+      <window_info id="Changes" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.3295063" sideWeight="0.49960285" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33869115" sideWeight="0.49960285" order="6" side_tool="false" content_ui="tabs" />
+      <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" weight="0.16362192" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.4" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
+      <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="2" side_tool="true" content_ui="tabs" />
+      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.1859931" sideWeight="0.50039715" order="7" side_tool="true" content_ui="tabs" />
+      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
+      <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
+      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
+      <window_info id="Commander" active="false" anchor="right" auto_hide="false" internal_type="SLIDING" type="SLIDING" visible="false" weight="0.4" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="Hierarchy" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="combo" />
+      <window_info id="Inspection" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.4" sideWeight="0.5" order="5" side_tool="false" content_ui="tabs" />
+    </layout>
+  </component>
+  <component name="Vcs.Log.UiProperties">
+    <option name="RECENTLY_FILTERED_USERS">
+      <collection />
+    </option>
+  </component>
+  <component name="VcsContentAnnotationSettings">
+    <option name="myLimit" value="2678400000" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="myTodoPanelSettings">
+      <TodoPanelSettings />
+    </option>
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager />
+  </component>
+  <component name="editorHistoryManager">
+    <entry file="file://$PROJECT_DIR$/manifest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="612">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/options.html">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="56" column="27" selection-start="1517" selection-end="1524" vertical-scroll-proportion="0.0" vertical-offset="952" max-vertical-offset="1921">
+          <folding>
+            <marker date="1392385829801" expanded="false" signature="1442:1494" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1495:2786" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1568:1726" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1811:1880" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1959:2027" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2090:2175" placeholder="..." />
+            <marker date="1392385829801" expanded="false" signature="2227:2305" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2507:2579" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2551:2573" placeholder="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/background.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="106" column="0" selection-start="3139" selection-end="3139" vertical-scroll-proportion="0.0" vertical-offset="1257" max-vertical-offset="2159">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/todos.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="126" column="47" selection-start="3210" selection-end="3210" vertical-scroll-proportion="0.0" vertical-offset="1606" max-vertical-offset="5491">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/css/styles.css">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="133" column="1" selection-start="1838" selection-end="1838" vertical-scroll-proportion="0.0" vertical-offset="1658" max-vertical-offset="3128">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/backbone.localStorage.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="59" column="76" selection-start="2232" selection-end="2232" vertical-scroll-proportion="0.0" vertical-offset="1003" max-vertical-offset="4046">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/manifest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="612">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/options.html">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="19" column="60" selection-start="675" selection-end="675" vertical-scroll-proportion="0.0" vertical-offset="323" max-vertical-offset="1819">
+          <folding>
+            <marker date="1392385829801" expanded="false" signature="1442:1494" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1495:2786" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1568:1726" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1811:1880" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1959:2027" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2090:2175" placeholder="..." />
+            <marker date="1392385829801" expanded="false" signature="2227:2305" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2507:2579" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2551:2573" placeholder="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/background.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="99" column="11" selection-start="2772" selection-end="2772" vertical-scroll-proportion="0.0" vertical-offset="1257" max-vertical-offset="2125">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/todos.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="13" column="10" selection-start="234" selection-end="234" vertical-scroll-proportion="0.0" vertical-offset="1275" max-vertical-offset="5287">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/css/styles.css">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="143" column="55" selection-start="2044" selection-end="2044" vertical-scroll-proportion="0.0" vertical-offset="1720" max-vertical-offset="2618">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/backbone.localStorage.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="59" column="76" selection-start="2232" selection-end="2232" vertical-scroll-proportion="0.0" vertical-offset="714" max-vertical-offset="4046">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/manifest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="612">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/options.html">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="73" column="91" selection-start="1963" selection-end="1963" vertical-scroll-proportion="0.0" vertical-offset="765" max-vertical-offset="1819">
+          <folding>
+            <marker date="1392385829801" expanded="false" signature="1442:1494" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1495:2786" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1568:1726" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1811:1880" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1959:2027" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2090:2175" placeholder="..." />
+            <marker date="1392385829801" expanded="false" signature="2227:2305" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2507:2579" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2551:2573" placeholder="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/background.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="100" column="0" selection-start="2941" selection-end="2941" vertical-scroll-proportion="0.0" vertical-offset="1700" max-vertical-offset="2091">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/todos.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="13" column="10" selection-start="234" selection-end="234" vertical-scroll-proportion="0.0" vertical-offset="1275" max-vertical-offset="5287">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/css/styles.css">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="139" column="5" selection-start="1894" selection-end="1894" vertical-scroll-proportion="0.0" vertical-offset="1635" max-vertical-offset="2482">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/backbone.localStorage.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="35" column="70" selection-start="1365" selection-end="1365" vertical-scroll-proportion="0.0" vertical-offset="595" max-vertical-offset="4029">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/manifest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="612">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/options.html">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="19" column="54" selection-start="620" selection-end="620" vertical-scroll-proportion="0.0" vertical-offset="323" max-vertical-offset="1615">
+          <folding>
+            <marker date="1392385829801" expanded="false" signature="1442:1494" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1495:2786" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1568:1726" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1811:1880" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1959:2027" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2090:2175" placeholder="..." />
+            <marker date="1392385829801" expanded="false" signature="2227:2305" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2507:2579" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2551:2573" placeholder="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/background.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="21" column="77" selection-start="539" selection-end="539" vertical-scroll-proportion="0.0" vertical-offset="357" max-vertical-offset="2261">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/todos.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="62" column="20" selection-start="1384" selection-end="1384" vertical-scroll-proportion="0.0" vertical-offset="1054" max-vertical-offset="5270">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/options.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="5" column="0" selection-start="77" selection-end="77" vertical-scroll-proportion="0.0" vertical-offset="85" max-vertical-offset="221" />
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/css/styles.css">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="131" column="13" selection-start="1783" selection-end="1783" vertical-scroll-proportion="0.0" vertical-offset="1550" max-vertical-offset="2414">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/backbone.localStorage.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="3944">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/manifest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="612">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/todos.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="15" column="6" selection-start="263" selection-end="263" vertical-scroll-proportion="0.0" vertical-offset="255" max-vertical-offset="4556">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/options.html">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="44" column="33" selection-start="974" selection-end="974" vertical-scroll-proportion="0.0" vertical-offset="748" max-vertical-offset="1445">
+          <folding>
+            <marker date="1392385829801" expanded="false" signature="1442:1494" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1495:2786" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1568:1726" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1811:1880" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1959:2027" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2090:2175" placeholder="..." />
+            <marker date="1392385829801" expanded="false" signature="2227:2305" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2507:2579" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2551:2573" placeholder="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/background.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="11" column="2" selection-start="152" selection-end="152" vertical-scroll-proportion="0.0" vertical-offset="187" max-vertical-offset="2193">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/manifest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="612">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/todos.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="15" column="6" selection-start="263" selection-end="263" vertical-scroll-proportion="0.0" vertical-offset="255" max-vertical-offset="4556">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/options.html">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="49" column="0" selection-start="1164" selection-end="1164" vertical-scroll-proportion="0.0" vertical-offset="187" max-vertical-offset="1428">
+          <folding>
+            <marker date="1392385829801" expanded="false" signature="1442:1494" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1495:2786" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1568:1726" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1811:1880" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1959:2027" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2090:2175" placeholder="..." />
+            <marker date="1392385829801" expanded="false" signature="2227:2305" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2507:2579" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2551:2573" placeholder="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/background.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="11" column="2" selection-start="152" selection-end="152" vertical-scroll-proportion="0.0" vertical-offset="798" max-vertical-offset="2193">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/manifest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="612">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/todos.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="19" column="6" selection-start="347" selection-end="347" vertical-scroll-proportion="0.0" vertical-offset="323" max-vertical-offset="4182">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/options.html">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="55" column="31" selection-start="1245" selection-end="1245" vertical-scroll-proportion="0.0" vertical-offset="590" max-vertical-offset="1496">
+          <folding>
+            <marker date="1392385829801" expanded="false" signature="1442:1494" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1495:2786" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1568:1726" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1811:1880" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1959:2027" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2090:2175" placeholder="..." />
+            <marker date="1392385829801" expanded="false" signature="2227:2305" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2507:2579" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2551:2573" placeholder="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/manifest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="612">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/todos.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="22" column="26" selection-start="400" selection-end="400" vertical-scroll-proportion="0.0" vertical-offset="374" max-vertical-offset="4182">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/backbone.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="15" column="0" selection-start="392" selection-end="392" vertical-scroll-proportion="0.2937788" vertical-offset="0" max-vertical-offset="26792">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/options.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="847" />
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/backbone.localStorage.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="59" column="76" selection-start="2232" selection-end="2232" vertical-scroll-proportion="0.0" vertical-offset="714" max-vertical-offset="4046">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/background.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="106" column="0" selection-start="3139" selection-end="3139" vertical-scroll-proportion="0.0" vertical-offset="1257" max-vertical-offset="2159">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/todos.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="126" column="47" selection-start="3210" selection-end="3210" vertical-scroll-proportion="0.0" vertical-offset="1606" max-vertical-offset="5491">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/manifest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="0" column="0" selection-start="0" selection-end="0" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="855">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/options.html">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="59" column="34" selection-start="1650" selection-end="1650" vertical-scroll-proportion="-7.8461537" vertical-offset="799" max-vertical-offset="1938">
+          <folding>
+            <marker date="1392385829801" expanded="false" signature="1442:1494" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1495:2786" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1525:1741" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1568:1726" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1811:1880" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="1959:2027" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2090:2175" placeholder="..." />
+            <marker date="1392385829801" expanded="false" signature="2227:2305" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2507:2579" placeholder="..." />
+            <marker date="1392385829801" expanded="true" signature="2551:2573" placeholder="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/css/styles.css">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="37" column="18" selection-start="483" selection-end="483" vertical-scroll-proportion="0.41898733" vertical-offset="298" max-vertical-offset="3077">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+  </component>
+</project>
+
