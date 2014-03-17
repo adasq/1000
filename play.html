@@ -1,0 +1,57 @@
+<html>
+
+    <head>
+        <title>1000 card game</title>
+        
+        
+    <!-- ===========================================================   TEMPLATES -->
+    <script type="html/text" id="card-template">
+     <div id="<%- cardId %>" class="card mini <%=(mini)?"mini":""%><%=(real)?"real":""%> <%=(visible)?"":"hidden-card"%>">
+              <div class="hidden-side"></div>            
+            <div class="card-inner-top">
+            <div class="number"><%= Shape.getNameByShapeId(cardShape) %></div>
+           <div class="small-type <%= Color.getNameByColorId(cardColor) %>"></div>
+            </div>
+            <div class="card-inner"><div class="type <%= Color.getNameByColorId(cardColor) %>">
+            </div></div><div class="card-inner-top rotated">
+            <div class="number"><%= Shape.getNameByShapeId(cardShape) %></div>
+           <div class="small-type <%= Color.getNameByColorId(cardColor) %>"></div>
+            </div>
+    </script>
+  
+    <script id="player-view" type="html/text">     
+    <b> <%= player.playerName %> </b>
+   <button class="bid-val">BID!!!!!!!!!!!!!!!</button>
+    </script>
+     <!-- ===========================================================   TEMPLATES -->
+        
+        <script src="lib/jquery-1.10.2.min.js"></script>
+        <script src="lib/underscore-min.js"></script>
+         <script src="lib/backbone.js"></script>
+         
+        <script src="lib/1000/Enums.js"></script>
+        <script src="lib/1000/RoundCardSet.js"></script>
+        <script src="lib/1000/Player.js"></script>
+	<script src="lib/1000/Players.js"></script>
+        <script src="lib/1000/Card.js"></script>
+        <script src="lib/1000/WinCardSet.js"></script>
+        <script src="lib/1000/CardSet.js"></script>
+        <script src="lib/1000/CardFactory.js"></script>
+	<script src="lib/1000/Pack.js"></script>
+        <script src="lib/1000/Round.js"></script>
+        <script src="lib/1000/GameTable.js"></script>
+        <script src="lib/1000/Battle.js"></script>
+        
+        <script src="lib/ThrowAnimator.js"></script>
+	 
+		 
+        <link rel="stylesheet" type="text/css" href="css/styles.css">
+    </head>
+    <body>
+        
+        <div id="table"></div>
+         <script src="lib/1000.js"></script>
+        
+        
+    </body>
+</html>
