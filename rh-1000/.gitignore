@@ -1,0 +1,6 @@
+node_modules/
+src/config/dropbox.js
+src/config/db.js
+src/ui/build
+ui/node_modules/
+ui/vendor/

@@ -1,0 +1,40 @@
+{
+  "name": "1000-botters",
+  "version": "1.0.0",
+  "description": "Card game based on socket.io",
+  "keywords": [
+    "1000",
+    "card",
+    "game",
+    ""
+  ],
+  "author": {
+    "name": "adasq",
+    "email": "adasq@gmail.com",
+    "url": ""
+  },
+  "homepage": "http://www.1000-botters.rhcloud.com/",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "engines": {
+    "node": ">= 0.6.0",
+    "npm": ">= 1.0.0"
+  },
+  "dependencies": {
+    "express": "~3.4.4", 
+    "q": "^1.0.1", 
+    "connect-mongo": "",
+    "underscore": "^1.7.0",
+    "mongoose": "",
+    "socket.io": "^1.1.0", 
+    "grunt": "~0.4.1"
+  },
+  "devDependencies": {
+    
+  },
+  "bundleDependencies": [],
+  "private": true,
+  "main": "server.js"
+}

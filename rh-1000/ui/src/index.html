@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html ng-app="1000" ng-controller="AppCtrl">
+  <head>
+    <title ng-bind="pageTitle"></title>
+
+    <!-- social media tags -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@yOomuG">
+    <meta name="twitter:title" content="1000">
+    <meta name="twitter:description" content="Web-based multiplayer card game.">
+    <meta name="twitter:creator" content="@yOomuG">
+    <meta name="twitter:image:src" content="http://the-party-loving.minitroopers.com/img/fb/minitroopers.png">
+    <meta property="og:title" content="1000" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="http://1000-botters.rhcloud.com" />
+    <meta property="og:image" content="http://the-party-loving.minitroopers.com/img/fb/minitroopers.png" />
+    <meta property="og:description" content="Minitroopers web-based game manager.">
+
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- font awesome from BootstrapCDN -->
+    <link href="http://netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
+
+    <!-- compiled CSS --><% styles.forEach( function ( file ) { %>
+    <link rel="stylesheet" type="text/css" href="<%= file %>" /><% }); %>
+
+    <!-- compiled JavaScript --><% scripts.forEach( function ( file ) { %>
+    <script type="text/javascript" src="<%= file %>"></script><% }); %>
+ <script src="http://localhost:35729/livereload.js"></script>
+ </head>
+  <body>
+ 
+    <div class="container" ui-view="main"></div>
+
+<br><br><br><br><br><br>
+<footer class="footer">
+  <div class="container"><p class="text-muted text-center">- Filebotters 2014 -</p></div>   
+   </footer>
+
+  </body>
+</html>

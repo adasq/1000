@@ -1,0 +1,11 @@
+<div class="form-group">
+    <label class="col-sm-3 control-label">{{field.field_title}}:</label>
+    <div class="col-sm-9">
+      <input ng-change="field.notify()" form-entity-validator placeholder="{{field.field_placeholder}}" class="form-control" type="{{field.field_type}}" 
+			ng-model="field.field_value"      
+			value="{{field.field_value}}" 
+			ng-required="field.field_required"
+			ng-disabled="field.field_disabled">
+       <!--  <span class="required-error" ng-show="field.field_required && !field.field_value">Field is required</span> -->
+    </div>
+</div>
