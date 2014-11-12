@@ -25,6 +25,7 @@ var gameOutputManager = {
 var gameInputManager = {
 	onPlayerConnected: function(pid){
 		console.log('onPlayerConnected ', pid);
+		gameOutputManager.sendToClientLobbyState(pid);
 	},
 	onTableConnected: function(){
 		console.log('onTableConnected');

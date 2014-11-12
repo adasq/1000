@@ -35,10 +35,10 @@ var _ = require('underscore');
 
 			}			
 		};
-		this.addClient = function(socketId) {
+		this.addClient = function(socketId, connectionId) {
 			clients.push({
 				socketId: socketId,
-				id: +(new Date()),
+				id: connectionId,
 				isAuthorized: false
 			});
 		};
@@ -51,9 +51,10 @@ var _ = require('underscore');
 		this.areClientsPrepared = function() {
 			return (that.getTotalClients() === 5);
 		};
-		this.authorizePlayer = function(id, playerName) {
+		this.authorizePlayer = function(socketId, id, playerName) {
 			var client = that.getClientById(id);
-			client.name = playerName;
+			client.name = playerName || client.name;
+			client.socketId = socketId;
 			client.type = that.type.PLAYER;
 			client.isAuthorized = true;
 		};
@@ -74,6 +75,7 @@ var _ = require('underscore');
 				console.log(JSON.stringify(client));
 			});
 			console.log('-----------------------');
+			return clients;
 		}
 	};
 

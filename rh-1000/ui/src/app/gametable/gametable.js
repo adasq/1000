@@ -2,7 +2,8 @@
 angular.module( '1000.gametable', [
   'ui.router',
   'ui.bootstrap',
-  'socket'
+  'socket',
+  '1000.gametable.join'
 ])
 .config(function config( $stateProvider ) {
   $stateProvider.state( 'gametable', {
@@ -21,33 +22,59 @@ angular.module( '1000.gametable', [
 
  var tid = $state.params.tid;
 
+
+
+
+
+$scope.connectionState = {
+  iAmConnected: false,
+  table: {
+    isConnected: true,
+    state: null
+  },
+  users: [
+  {
+    name: 'adam',
+    isConnected: true
+  },
+  {
+    name: 'xxxx',
+    isConnected: true
+  }]
+};
+
+
 function makeid(){
     var text = "";
     var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
     for( var i=0; i < 5; i++ ){
           text += possible.charAt(Math.floor(Math.random() * possible.length));
         }
-
     return text;
 }
-
 var CommunicationManager = function(socket, gameOutputManager, gameInputManager){
-  
 var that = this;
-  this.isReadyToAuthorize = false;
+  this.cid = null;
 
-  socket.on('ACK', function () {
-    console.log('rdy');
-    that.isReadyToAuthorize = true;
+  socket.on('ACK', function (response) {    
+    console.log('rdy');  
+    if(sessionStorage['cid']){
+      //reauthorize      
+      that.cid = sessionStorage['cid'];
+      that.authorizeAsPlayer();
+    }else{
+      sessionStorage['cid']= response.cid;
+      that.cid = response.cid;
+
+    }
   });
 
   socket.on('message', function(msg){
       $log.log('message!', msg);
   });
   this.authorizeAsPlayer = function(playerName){
-    if(this.isReadyToAuthorize){
-      socket.emit('SYN-ACK', {name: (playerName || makeid())});
+    if(this.cid){
+      socket.emit('SYN-ACK', {cid: that.cid, name: (playerName || null)});
     }
   };
   this.authorizeAsTable = function(){
@@ -73,10 +100,10 @@ $scope.change = function(){
 };
 $scope.msg = 'aaaaa';
 
-
-setTimeout(function() {
-  cm.authorizeAsPlayer();
-}, 200);
+ 
+$scope.onJoinAsPlayer = function(playerName){
+  cm.authorizeAsPlayer(playerName);
+};
 
 
 });
