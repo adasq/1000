@@ -4,7 +4,6 @@ Clients = require('./Clients');
 	
 module.exports = function(socketManager) {
 
-
 function makeid(){
     var text = "";
     var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -14,66 +13,74 @@ function makeid(){
     return text;
 }
 
-
 var CommunicationManager = function(gameInputManager, gameOutputManager){
 	var that= this;
 	this.clients = new Clients();	
 
 	gameOutputManager.sendToClient = function(id, msg){
-		var client = that.clients.getClientById(id);
-		that.send(client.socketId, 'message', msg);
+		var client = that.clients.getClientByAid(id);
+		that.send(client.aid, 'message', msg);
 	};
-	gameOutputManager.sendToClientLobbyState = function(id){
-		var client = that.clients.getClientById(id);
-		that.send(client.socketId, 'message', that.clients.toString());
+	gameOutputManager.sendToClients = function(msg){
+		_.each(that.clients.getClients(), function(clientAid) {
+			that.send(clientAid, 'message', msg || 'clientAid '+clientAid);
+		});		
+	};	
+
+	gameOutputManager.sendToClientLobbyState = function(aid){
+		var client = that.clients.getClientByAid(aid);
+		that.send(client.aid, 'message', that.clients.toString());
 	};
+
 	gameOutputManager.sendToTable = function(msg){
 		var table = that.clients.getTable();
 		if(table){
-			that.send(table.socketId, 'message', msg);			
+			that.send(table.aid, 'message', msg);			
 		}else{
 			console.log('no table found');
 		}
 	};
 
 //----------------------------------------
-	this.onConnection(function(socketId){
-
-		if(!that.clients.areClientsPrepared()){
-			//not enought clients			
-			var connectionId = makeid();
-			that.clients.addClient(socketId, connectionId);
-			that.send(socketId, 'ACK', {cid: connectionId});
-			console.log('adding clietns');
-		}else{
-			//enought clients, so we try to reauthorize
-			console.log('re-authorizing');
-			that.clients.reAuthorize(socketId);			
-		}
-		that.clients.toString();
-	});
-//----------------------------------------
-	this.onAuthorize(function(socketId, msg){
-		console.log('onAuthorize', msg);
-		var client = that.clients.getClientById(msg.cid);
-
-		if(!client.isAuthorized){
-			that.clients.authorizePlayer(socketId, client.id, msg.name);
-			gameInputManager.onPlayerConnected(client.id);
+	this.onReconnection(function(aid){
+		console.log('onReconnection', aid);		
+		that.clients.reConnect(aid);
+		var client = that.clients.getClientByAid(aid);
+		if(client.isAuthorized){
+			gameInputManager.onPlayerReconnected(client.aid);
 		}		
-		
-		
+		that.clients.toString();
+	});
+	this.onConnection(function(aid){
+		console.log('onConnection', aid);
+		that.clients.addClient(aid);
+		gameOutputManager.sendToClientLobbyState(aid);
+		console.log('adding clietns');		
 		that.clients.toString();
 	});
 //----------------------------------------
-	this.onDisconnection(function(socketId){
-		that.clients.removeClient(socketId);	
+	this.onAuthorize(function(aid, msg){
+		console.log(aid, 'onAuthorize', msg);
+		var client = that.clients.getClientByAid(msg.aid);
+		if(!client){
+			return;
+		}
+		if(!client.isAuthorized){
+			that.clients.authorizePlayer(aid, msg.name);			
+		}
+		gameInputManager.onPlayerConnected(client.aid);	
+		//that.clients.deleteUnauthorizedByAid(aid);		
+		that.clients.toString();
+	});
+//----------------------------------------
+	this.onDisconnection(function(aid){
+		that.clients.removeClient(aid);	
 		that.clients.toString();	
 	});
 
-	this.onMessage(function(socketId, msg){
+	this.onMessage(function(aid, msg){
 			var client = that.clients.getClientBySocketId(socketId); 
-			gameInputManager.onThrowCard(client.id, {cardId: 666});
+			gameInputManager.onThrowCard(client.aid, {cardId: 666});
 	});
 };
 

@@ -19,13 +19,19 @@ var CommunicationManager = require('./models/CommunicationManager.js')(server.so
 //-----------------------------------------------------
 
 var gameOutputManager = {
-	sendToClient: function(id, msg){}
+	sendToClient: function(id, msg){},
+	sendToClients: function(msg){}
 };
 
 var gameInputManager = {
-	onPlayerConnected: function(pid){
-		console.log('onPlayerConnected ', pid);
-		gameOutputManager.sendToClientLobbyState(pid);
+	
+	onPlayerReconnected: function(aid){
+		console.log('!!!!!!!!!!onPlayerREconnected ', aid);
+		gameOutputManager.sendToClientLobbyState(aid);
+	},	
+	onPlayerConnected: function(aid){
+		console.log('!!!!!!!!!!onPlayerConnected ', aid);
+		gameOutputManager.sendToClientLobbyState(aid);
 	},
 	onTableConnected: function(){
 		console.log('onTableConnected');
@@ -34,7 +40,9 @@ var gameInputManager = {
 		gameOutputManager.sendToClient(id, msg);
 	}
 };
-
+setInterval(function() {
+	gameOutputManager.sendToClients();
+}, 5000);
 
 (new CommunicationManager(gameInputManager, gameOutputManager));
 

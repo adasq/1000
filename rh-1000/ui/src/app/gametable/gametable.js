@@ -22,10 +22,6 @@ angular.module( '1000.gametable', [
 
  var tid = $state.params.tid;
 
-
-
-
-
 $scope.connectionState = {
   iAmConnected: false,
   table: {
@@ -53,46 +49,50 @@ function makeid(){
     return text;
 }
 var CommunicationManager = function(socket, gameOutputManager, gameInputManager){
-var that = this;
-  this.cid = null;
+  var that = this;
+  this.aid = sessionStorage['aid'] || null;
+  $log.log(this.aid);
+  //syn
 
-  socket.on('ACK', function (response) {    
-    console.log('rdy');  
-    if(sessionStorage['cid']){
-      //reauthorize      
-      that.cid = sessionStorage['cid'];
+  socket.on('ACK', function () {
+    if(that.aid){
+      //reauthorize    
       that.authorizeAsPlayer();
     }else{
-      sessionStorage['cid']= response.cid;
-      that.cid = response.cid;
-
+      //authorie
+      that.aid= sessionStorage['aid']= makeid();
     }
+    socket.emit('CONNECT', {aid: that.aid});
+
   });
 
   socket.on('message', function(msg){
-      $log.log('message!', msg);
+      console.table(msg);
   });
   this.authorizeAsPlayer = function(playerName){
-    if(this.cid){
-      socket.emit('SYN-ACK', {cid: that.cid, name: (playerName || null)});
+    if(this.aid){
+      socket.emit('AUTHORIZE', {aid: that.aid, name: (playerName || null)});
     }
   };
   this.authorizeAsTable = function(){
-    socket.emit('SYN-ACK', {});
+    socket.emit('AUTHORIZE', {});
   };
   this.send = function(msg){
     socket.emit('message', msg);
   };
 };
-
+//================================================================================
 var gameOutputManager = {
-  throwCard: function(cid){}
-};
-var gameInputManager = {
-  onReceiveCard: function(cid){
-    $log.log('otrzymalem karte cid: ', cid);
+  throwCard: function(aid){
+
   }
 };
+var gameInputManager = {
+  onReceiveCard: function(aid){
+    $log.log('otrzymalem karte aid: ', aid);
+  }
+};
+
 var cm = new CommunicationManager(socket, gameOutputManager, gameInputManager);
 
 $scope.change = function(){

@@ -9,59 +9,69 @@ var _ = require('underscore');
 			PLAYER: 'ppl',
 			TABLE: 'table'
 		};
+		this.getClients = function() {
+			return _.pluck(clients, 'aid');
+		}
 		this.getTotalClients = function() {
 			return clients.length;
 		};
-		this.getClientBySocketId = function(socketId){
+		this.getClientByAid = function(aid){
 			return _.find(clients, function(client){
-				return client.socketId === socketId;
+				return client.aid === aid;
 			});
+		};		
+		this.reConnect = function(aid) {
+			var client = that.getClientByAid(aid);
+			client.isConnected = true;
 		};
-		this.getClientById = function(id) {
-			return _.find(clients, function(client){
-				return client.id === id;
-			});
-		};
-		this.reAuthorize = function(socketId){
+		this.reAuthorize = function(aid){
 			var unAuthorized =  _.find(clients, function(client){
 				return client.isAuthorized === false;
 			});
-			if(unAuthorized){		
-					unAuthorized.socketId = socketId;
-					unAuthorized.isAuthorized = true;
+			if(unAuthorized){
+					unAuthorized.aid = aid;
+					unAuthorized.isAuthorized = true;					
 			}else{
 				//no more slots available for player!
-				console.log('no more slots available')
-
+				console.log('no more slots available');
 			}			
 		};
-		this.addClient = function(socketId, connectionId) {
+		this.addClient = function(aid) {
 			clients.push({
-				socketId: socketId,
-				id: connectionId,
-				isAuthorized: false
+				aid: aid, 
+				isAuthorized: false,
+				isConnected: true
 			});
 		};
-		this.removeClient = function(socketId) {
-			var client= that.getClientBySocketId(socketId);
+		this.deleteByAid = function(aid) {
+			_.each(clients, function(client, i){
+				if(client.aid === aid){
+					clients.splice(i, 1);
+				}
+			});
+		};
+		this.deleteUnauthorizedByAid = function(aid) {
+			_.each(clients, function(client, i){
+				if(client.aid === aid && client.isAuthorized === false){
+					clients.splice(i, 1);
+				}
+			});
+		};
+		this.removeClient = function(aid) {
+			var client= that.getClientByAid(aid);
 			if(client){
-				client.isAuthorized = false;
+				client.isConnected = false;
 			}
-		};
-		this.areClientsPrepared = function() {
-			return (that.getTotalClients() === 5);
-		};
-		this.authorizePlayer = function(socketId, id, playerName) {
-			var client = that.getClientById(id);
+		};		
+		this.authorizePlayer = function(aid, playerName) {
+			var client = that.getClientByAid(aid);
 			client.name = playerName || client.name;
-			client.socketId = socketId;
 			client.type = that.type.PLAYER;
 			client.isAuthorized = true;
 		};
 		this.authorizeTable = function() {
-			var client = that.getClientById(id);
-			client.type = that.type.TABLE;
-			client.isAuthorized = true;
+		
+
 		};
 		this.getTable = function() {
 			var table = _.find(clients, function(client) {
