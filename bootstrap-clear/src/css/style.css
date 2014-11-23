@@ -1,0 +1,33 @@
+.vertical-align {
+  display: flex;
+  align-items: center;
+}
+.mb-promo-page {
+  color: white;
+  font-weight: 400;
+  font-size: 20px;
+}
+.mb-promo-page h1 {
+  font-size: 80px;
+}
+.mb-promo-page h2 {
+  font-weight: 400;
+}
+.mb-promo-page #view1 .mb-promo-img {
+  position: relative;
+  -webkit-filter: blur(0px);
+  background: url('http://img.wallpaperstock.net:81/advance-wars-wallpapers_20462_1024x768.png') no-repeat center top;
+  height: 600px;
+  -webkit-background-size: cover;
+  -moz-background-size: cover;
+  -o-background-size: cover;
+  background-size: cover;
+}
+.mb-promo-page .orange {
+  background-color: #FF9900;
+  height: 450px;
+}
+.mb-promo-page .blue {
+  background-color: #7EB4FC;
+  height: 300px;
+}

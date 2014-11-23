@@ -1,0 +1,79 @@
+var RCPManager = function(){
+  
+};
+
+var rpcManager = new RCPManager();
+
+var server = {
+  // send info ============================
+  cardToClient: function(cid){},
+  bid: function(money){},
+  throwCard: function(cid){},
+  
+  //receiveInfo ===========================
+  onThrowCard: function(cid){
+    //console.log(this);
+    this.throwCard('xd').then(function(result){
+      console.log(result);
+    });
+  },  
+  onBid: function(money){},
+  onCardToClient: function(cid){}
+};
+server.onThrowCard.ann = {test: 1};
+
+
+
+var getParamsByFn = function(target){
+    var FN_ARGS = /^function\s*[^\(]*\(\s*([^\)]*)\)/m;
+    var text = target.toString();
+    var args = text.match(FN_ARGS)[1].split(',');
+    return args;
+};
+
+var callbacksInfo = [];
+
+_.each(server, function(fn, name){
+  callbacksInfo.push({
+    name: name,
+    ann: fn.ann || null,
+    normalizedName: name.toLowerCase(),
+    isOutputFn: !!(name.toLowerCase().substr(0,2) === "on"),
+    args: getParamsByFn(fn.toString())
+  });
+});
+
+var getOutputTypeCallbacks= function(callbacks){
+  return _.filter(callbacks, function(cb){
+    return !cb.isOutputFn;
+  });  
+};
+var getInputTypeCallbacks= function(callbacks){
+  return _.filter(callbacks, function(cb){
+    return cb.isOutputFn;
+  });    
+};
+
+
+var inputTypeCallbacks = getInputTypeCallbacks(callbacksInfo);
+var outputTypeCallbacks = getOutputTypeCallbacks(callbacksInfo);
+
+
+
+//u usera:
+var thisX = {
+  id: 1
+};
+_.each(outputTypeCallbacks, function(callback){  
+  thisX[callback.name]= function(){
+    var deferred = Q.defer();
+    console.log(callback.name+' called');
+    setTimeout(function(){
+      deferred.resolve({ans:'wer'});
+    }, 200);
+    return deferred.promise;
+  };
+});
+
+server.onThrowCard.call(thisX, 'aaa');
+
