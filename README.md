@@ -1,3 +1,3 @@
-Excellent  three-player card game! 
-based on jquery library.
+###1000
 
+node.js + express + socket.io +  + mongodb + angularjs
