@@ -17,7 +17,8 @@
 
 <script>
   var endpoint = new RPC.EndpointManager('http://localhost');
-  console.log(endpoint);
+
+ 
 
   endpoint.onMessage(function(msg) {
     console.log('otrzymalem z serwera',msg);
@@ -25,6 +26,13 @@
 
   setTimeout(function() {
     endpoint.authorize('adamek');
+
+
+
+
+
+
+
   }, 1000);
 
 </script>

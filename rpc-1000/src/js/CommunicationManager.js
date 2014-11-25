@@ -39,9 +39,10 @@ var CommunicationManager = function(gameInputManager, gameOutputManager){
 			return;
 		}
 		if(!client.isAuthorized){
-			that.clients.authorizePlayer(aid, msg.name);			
+			that.clients.authorizePlayer(aid, msg.name);
+			gameInputManager.onPlayerConnected(client.aid);				
 		}
-		gameInputManager.onPlayerConnected(client.aid);	
+		
 		//that.clients.deleteUnauthorizedByAid(aid);		
 		that.clients.toString();
 	});

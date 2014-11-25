@@ -1,8 +1,1949 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function (process){
+// vim:ts=4:sts=4:sw=4:
+/*!
+ *
+ * Copyright 2009-2012 Kris Kowal under the terms of the MIT
+ * license found at http://github.com/kriskowal/q/raw/master/LICENSE
+ *
+ * With parts by Tyler Close
+ * Copyright 2007-2009 Tyler Close under the terms of the MIT X license found
+ * at http://www.opensource.org/licenses/mit-license.html
+ * Forked at ref_send.js version: 2009-05-11
+ *
+ * With parts by Mark Miller
+ * Copyright (C) 2011 Google Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+(function (definition) {
+    "use strict";
+
+    // This file will function properly as a <script> tag, or a module
+    // using CommonJS and NodeJS or RequireJS module formats.  In
+    // Common/Node/RequireJS, the module exports the Q API and when
+    // executed as a simple <script>, it creates a Q global instead.
+
+    // Montage Require
+    if (typeof bootstrap === "function") {
+        bootstrap("promise", definition);
+
+    // CommonJS
+    } else if (typeof exports === "object" && typeof module === "object") {
+        module.exports = definition();
+
+    // RequireJS
+    } else if (typeof define === "function" && define.amd) {
+        define(definition);
+
+    // SES (Secure EcmaScript)
+    } else if (typeof ses !== "undefined") {
+        if (!ses.ok()) {
+            return;
+        } else {
+            ses.makeQ = definition;
+        }
+
+    // <script>
+    } else if (typeof self !== "undefined") {
+        self.Q = definition();
+
+    } else {
+        throw new Error("This environment was not anticiapted by Q. Please file a bug.");
+    }
+
+})(function () {
+"use strict";
+
+var hasStacks = false;
+try {
+    throw new Error();
+} catch (e) {
+    hasStacks = !!e.stack;
+}
+
+// All code after this point will be filtered from stack traces reported
+// by Q.
+var qStartingLine = captureLine();
+var qFileName;
+
+// shims
+
+// used for fallback in "allResolved"
+var noop = function () {};
+
+// Use the fastest possible means to execute a task in a future turn
+// of the event loop.
+var nextTick =(function () {
+    // linked list of tasks (single, with head node)
+    var head = {task: void 0, next: null};
+    var tail = head;
+    var flushing = false;
+    var requestTick = void 0;
+    var isNodeJS = false;
+
+    function flush() {
+        /* jshint loopfunc: true */
+
+        while (head.next) {
+            head = head.next;
+            var task = head.task;
+            head.task = void 0;
+            var domain = head.domain;
+
+            if (domain) {
+                head.domain = void 0;
+                domain.enter();
+            }
+
+            try {
+                task();
+
+            } catch (e) {
+                if (isNodeJS) {
+                    // In node, uncaught exceptions are considered fatal errors.
+                    // Re-throw them synchronously to interrupt flushing!
+
+                    // Ensure continuation if the uncaught exception is suppressed
+                    // listening "uncaughtException" events (as domains does).
+                    // Continue in next event to avoid tick recursion.
+                    if (domain) {
+                        domain.exit();
+                    }
+                    setTimeout(flush, 0);
+                    if (domain) {
+                        domain.enter();
+                    }
+
+                    throw e;
+
+                } else {
+                    // In browsers, uncaught exceptions are not fatal.
+                    // Re-throw them asynchronously to avoid slow-downs.
+                    setTimeout(function() {
+                       throw e;
+                    }, 0);
+                }
+            }
+
+            if (domain) {
+                domain.exit();
+            }
+        }
+
+        flushing = false;
+    }
+
+    nextTick = function (task) {
+        tail = tail.next = {
+            task: task,
+            domain: isNodeJS && process.domain,
+            next: null
+        };
+
+        if (!flushing) {
+            flushing = true;
+            requestTick();
+        }
+    };
+
+    if (typeof process !== "undefined" && process.nextTick) {
+        // Node.js before 0.9. Note that some fake-Node environments, like the
+        // Mocha test runner, introduce a `process` global without a `nextTick`.
+        isNodeJS = true;
+
+        requestTick = function () {
+            process.nextTick(flush);
+        };
+
+    } else if (typeof setImmediate === "function") {
+        // In IE10, Node.js 0.9+, or https://github.com/NobleJS/setImmediate
+        if (typeof window !== "undefined") {
+            requestTick = setImmediate.bind(window, flush);
+        } else {
+            requestTick = function () {
+                setImmediate(flush);
+            };
+        }
+
+    } else if (typeof MessageChannel !== "undefined") {
+        // modern browsers
+        // http://www.nonblocking.io/2011/06/windownexttick.html
+        var channel = new MessageChannel();
+        // At least Safari Version 6.0.5 (8536.30.1) intermittently cannot create
+        // working message ports the first time a page loads.
+        channel.port1.onmessage = function () {
+            requestTick = requestPortTick;
+            channel.port1.onmessage = flush;
+            flush();
+        };
+        var requestPortTick = function () {
+            // Opera requires us to provide a message payload, regardless of
+            // whether we use it.
+            channel.port2.postMessage(0);
+        };
+        requestTick = function () {
+            setTimeout(flush, 0);
+            requestPortTick();
+        };
+
+    } else {
+        // old browsers
+        requestTick = function () {
+            setTimeout(flush, 0);
+        };
+    }
+
+    return nextTick;
+})();
+
+// Attempt to make generics safe in the face of downstream
+// modifications.
+// There is no situation where this is necessary.
+// If you need a security guarantee, these primordials need to be
+// deeply frozen anyway, and if you don’t need a security guarantee,
+// this is just plain paranoid.
+// However, this **might** have the nice side-effect of reducing the size of
+// the minified code by reducing x.call() to merely x()
+// See Mark Miller’s explanation of what this does.
+// http://wiki.ecmascript.org/doku.php?id=conventions:safe_meta_programming
+var call = Function.call;
+function uncurryThis(f) {
+    return function () {
+        return call.apply(f, arguments);
+    };
+}
+// This is equivalent, but slower:
+// uncurryThis = Function_bind.bind(Function_bind.call);
+// http://jsperf.com/uncurrythis
+
+var array_slice = uncurryThis(Array.prototype.slice);
+
+var array_reduce = uncurryThis(
+    Array.prototype.reduce || function (callback, basis) {
+        var index = 0,
+            length = this.length;
+        // concerning the initial value, if one is not provided
+        if (arguments.length === 1) {
+            // seek to the first value in the array, accounting
+            // for the possibility that is is a sparse array
+            do {
+                if (index in this) {
+                    basis = this[index++];
+                    break;
+                }
+                if (++index >= length) {
+                    throw new TypeError();
+                }
+            } while (1);
+        }
+        // reduce
+        for (; index < length; index++) {
+            // account for the possibility that the array is sparse
+            if (index in this) {
+                basis = callback(basis, this[index], index);
+            }
+        }
+        return basis;
+    }
+);
+
+var array_indexOf = uncurryThis(
+    Array.prototype.indexOf || function (value) {
+        // not a very good shim, but good enough for our one use of it
+        for (var i = 0; i < this.length; i++) {
+            if (this[i] === value) {
+                return i;
+            }
+        }
+        return -1;
+    }
+);
+
+var array_map = uncurryThis(
+    Array.prototype.map || function (callback, thisp) {
+        var self = this;
+        var collect = [];
+        array_reduce(self, function (undefined, value, index) {
+            collect.push(callback.call(thisp, value, index, self));
+        }, void 0);
+        return collect;
+    }
+);
+
+var object_create = Object.create || function (prototype) {
+    function Type() { }
+    Type.prototype = prototype;
+    return new Type();
+};
+
+var object_hasOwnProperty = uncurryThis(Object.prototype.hasOwnProperty);
+
+var object_keys = Object.keys || function (object) {
+    var keys = [];
+    for (var key in object) {
+        if (object_hasOwnProperty(object, key)) {
+            keys.push(key);
+        }
+    }
+    return keys;
+};
+
+var object_toString = uncurryThis(Object.prototype.toString);
+
+function isObject(value) {
+    return value === Object(value);
+}
+
+// generator related shims
+
+// FIXME: Remove this function once ES6 generators are in SpiderMonkey.
+function isStopIteration(exception) {
+    return (
+        object_toString(exception) === "[object StopIteration]" ||
+        exception instanceof QReturnValue
+    );
+}
+
+// FIXME: Remove this helper and Q.return once ES6 generators are in
+// SpiderMonkey.
+var QReturnValue;
+if (typeof ReturnValue !== "undefined") {
+    QReturnValue = ReturnValue;
+} else {
+    QReturnValue = function (value) {
+        this.value = value;
+    };
+}
+
+// long stack traces
+
+var STACK_JUMP_SEPARATOR = "From previous event:";
+
+function makeStackTraceLong(error, promise) {
+    // If possible, transform the error stack trace by removing Node and Q
+    // cruft, then concatenating with the stack trace of `promise`. See #57.
+    if (hasStacks &&
+        promise.stack &&
+        typeof error === "object" &&
+        error !== null &&
+        error.stack &&
+        error.stack.indexOf(STACK_JUMP_SEPARATOR) === -1
+    ) {
+        var stacks = [];
+        for (var p = promise; !!p; p = p.source) {
+            if (p.stack) {
+                stacks.unshift(p.stack);
+            }
+        }
+        stacks.unshift(error.stack);
+
+        var concatedStacks = stacks.join("\n" + STACK_JUMP_SEPARATOR + "\n");
+        error.stack = filterStackString(concatedStacks);
+    }
+}
+
+function filterStackString(stackString) {
+    var lines = stackString.split("\n");
+    var desiredLines = [];
+    for (var i = 0; i < lines.length; ++i) {
+        var line = lines[i];
+
+        if (!isInternalFrame(line) && !isNodeFrame(line) && line) {
+            desiredLines.push(line);
+        }
+    }
+    return desiredLines.join("\n");
+}
+
+function isNodeFrame(stackLine) {
+    return stackLine.indexOf("(module.js:") !== -1 ||
+           stackLine.indexOf("(node.js:") !== -1;
+}
+
+function getFileNameAndLineNumber(stackLine) {
+    // Named functions: "at functionName (filename:lineNumber:columnNumber)"
+    // In IE10 function name can have spaces ("Anonymous function") O_o
+    var attempt1 = /at .+ \((.+):(\d+):(?:\d+)\)$/.exec(stackLine);
+    if (attempt1) {
+        return [attempt1[1], Number(attempt1[2])];
+    }
+
+    // Anonymous functions: "at filename:lineNumber:columnNumber"
+    var attempt2 = /at ([^ ]+):(\d+):(?:\d+)$/.exec(stackLine);
+    if (attempt2) {
+        return [attempt2[1], Number(attempt2[2])];
+    }
+
+    // Firefox style: "function@filename:lineNumber or @filename:lineNumber"
+    var attempt3 = /.*@(.+):(\d+)$/.exec(stackLine);
+    if (attempt3) {
+        return [attempt3[1], Number(attempt3[2])];
+    }
+}
+
+function isInternalFrame(stackLine) {
+    var fileNameAndLineNumber = getFileNameAndLineNumber(stackLine);
+
+    if (!fileNameAndLineNumber) {
+        return false;
+    }
+
+    var fileName = fileNameAndLineNumber[0];
+    var lineNumber = fileNameAndLineNumber[1];
+
+    return fileName === qFileName &&
+        lineNumber >= qStartingLine &&
+        lineNumber <= qEndingLine;
+}
+
+// discover own file name and line number range for filtering stack
+// traces
+function captureLine() {
+    if (!hasStacks) {
+        return;
+    }
+
+    try {
+        throw new Error();
+    } catch (e) {
+        var lines = e.stack.split("\n");
+        var firstLine = lines[0].indexOf("@") > 0 ? lines[1] : lines[2];
+        var fileNameAndLineNumber = getFileNameAndLineNumber(firstLine);
+        if (!fileNameAndLineNumber) {
+            return;
+        }
+
+        qFileName = fileNameAndLineNumber[0];
+        return fileNameAndLineNumber[1];
+    }
+}
+
+function deprecate(callback, name, alternative) {
+    return function () {
+        if (typeof console !== "undefined" &&
+            typeof console.warn === "function") {
+            console.warn(name + " is deprecated, use " + alternative +
+                         " instead.", new Error("").stack);
+        }
+        return callback.apply(callback, arguments);
+    };
+}
+
+// end of shims
+// beginning of real work
+
+/**
+ * Constructs a promise for an immediate reference, passes promises through, or
+ * coerces promises from different systems.
+ * @param value immediate reference or promise
+ */
+function Q(value) {
+    // If the object is already a Promise, return it directly.  This enables
+    // the resolve function to both be used to created references from objects,
+    // but to tolerably coerce non-promises to promises.
+    if (value instanceof Promise) {
+        return value;
+    }
+
+    // assimilate thenables
+    if (isPromiseAlike(value)) {
+        return coerce(value);
+    } else {
+        return fulfill(value);
+    }
+}
+Q.resolve = Q;
+
+/**
+ * Performs a task in a future turn of the event loop.
+ * @param {Function} task
+ */
+Q.nextTick = nextTick;
+
+/**
+ * Controls whether or not long stack traces will be on
+ */
+Q.longStackSupport = false;
+
+// enable long stacks if Q_DEBUG is set
+if (typeof process === "object" && process && process.env && process.env.Q_DEBUG) {
+    Q.longStackSupport = true;
+}
+
+/**
+ * Constructs a {promise, resolve, reject} object.
+ *
+ * `resolve` is a callback to invoke with a more resolved value for the
+ * promise. To fulfill the promise, invoke `resolve` with any value that is
+ * not a thenable. To reject the promise, invoke `resolve` with a rejected
+ * thenable, or invoke `reject` with the reason directly. To resolve the
+ * promise to another thenable, thus putting it in the same state, invoke
+ * `resolve` with that other thenable.
+ */
+Q.defer = defer;
+function defer() {
+    // if "messages" is an "Array", that indicates that the promise has not yet
+    // been resolved.  If it is "undefined", it has been resolved.  Each
+    // element of the messages array is itself an array of complete arguments to
+    // forward to the resolved promise.  We coerce the resolution value to a
+    // promise using the `resolve` function because it handles both fully
+    // non-thenable values and other thenables gracefully.
+    var messages = [], progressListeners = [], resolvedPromise;
+
+    var deferred = object_create(defer.prototype);
+    var promise = object_create(Promise.prototype);
+
+    promise.promiseDispatch = function (resolve, op, operands) {
+        var args = array_slice(arguments);
+        if (messages) {
+            messages.push(args);
+            if (op === "when" && operands[1]) { // progress operand
+                progressListeners.push(operands[1]);
+            }
+        } else {
+            Q.nextTick(function () {
+                resolvedPromise.promiseDispatch.apply(resolvedPromise, args);
+            });
+        }
+    };
+
+    // XXX deprecated
+    promise.valueOf = function () {
+        if (messages) {
+            return promise;
+        }
+        var nearerValue = nearer(resolvedPromise);
+        if (isPromise(nearerValue)) {
+            resolvedPromise = nearerValue; // shorten chain
+        }
+        return nearerValue;
+    };
+
+    promise.inspect = function () {
+        if (!resolvedPromise) {
+            return { state: "pending" };
+        }
+        return resolvedPromise.inspect();
+    };
+
+    if (Q.longStackSupport && hasStacks) {
+        try {
+            throw new Error();
+        } catch (e) {
+            // NOTE: don't try to use `Error.captureStackTrace` or transfer the
+            // accessor around; that causes memory leaks as per GH-111. Just
+            // reify the stack trace as a string ASAP.
+            //
+            // At the same time, cut off the first line; it's always just
+            // "[object Promise]\n", as per the `toString`.
+            promise.stack = e.stack.substring(e.stack.indexOf("\n") + 1);
+        }
+    }
+
+    // NOTE: we do the checks for `resolvedPromise` in each method, instead of
+    // consolidating them into `become`, since otherwise we'd create new
+    // promises with the lines `become(whatever(value))`. See e.g. GH-252.
+
+    function become(newPromise) {
+        resolvedPromise = newPromise;
+        promise.source = newPromise;
+
+        array_reduce(messages, function (undefined, message) {
+            Q.nextTick(function () {
+                newPromise.promiseDispatch.apply(newPromise, message);
+            });
+        }, void 0);
+
+        messages = void 0;
+        progressListeners = void 0;
+    }
+
+    deferred.promise = promise;
+    deferred.resolve = function (value) {
+        if (resolvedPromise) {
+            return;
+        }
+
+        become(Q(value));
+    };
+
+    deferred.fulfill = function (value) {
+        if (resolvedPromise) {
+            return;
+        }
+
+        become(fulfill(value));
+    };
+    deferred.reject = function (reason) {
+        if (resolvedPromise) {
+            return;
+        }
+
+        become(reject(reason));
+    };
+    deferred.notify = function (progress) {
+        if (resolvedPromise) {
+            return;
+        }
+
+        array_reduce(progressListeners, function (undefined, progressListener) {
+            Q.nextTick(function () {
+                progressListener(progress);
+            });
+        }, void 0);
+    };
+
+    return deferred;
+}
+
+/**
+ * Creates a Node-style callback that will resolve or reject the deferred
+ * promise.
+ * @returns a nodeback
+ */
+defer.prototype.makeNodeResolver = function () {
+    var self = this;
+    return function (error, value) {
+        if (error) {
+            self.reject(error);
+        } else if (arguments.length > 2) {
+            self.resolve(array_slice(arguments, 1));
+        } else {
+            self.resolve(value);
+        }
+    };
+};
+
+/**
+ * @param resolver {Function} a function that returns nothing and accepts
+ * the resolve, reject, and notify functions for a deferred.
+ * @returns a promise that may be resolved with the given resolve and reject
+ * functions, or rejected by a thrown exception in resolver
+ */
+Q.Promise = promise; // ES6
+Q.promise = promise;
+function promise(resolver) {
+    if (typeof resolver !== "function") {
+        throw new TypeError("resolver must be a function.");
+    }
+    var deferred = defer();
+    try {
+        resolver(deferred.resolve, deferred.reject, deferred.notify);
+    } catch (reason) {
+        deferred.reject(reason);
+    }
+    return deferred.promise;
+}
+
+promise.race = race; // ES6
+promise.all = all; // ES6
+promise.reject = reject; // ES6
+promise.resolve = Q; // ES6
+
+// XXX experimental.  This method is a way to denote that a local value is
+// serializable and should be immediately dispatched to a remote upon request,
+// instead of passing a reference.
+Q.passByCopy = function (object) {
+    //freeze(object);
+    //passByCopies.set(object, true);
+    return object;
+};
+
+Promise.prototype.passByCopy = function () {
+    //freeze(object);
+    //passByCopies.set(object, true);
+    return this;
+};
+
+/**
+ * If two promises eventually fulfill to the same value, promises that value,
+ * but otherwise rejects.
+ * @param x {Any*}
+ * @param y {Any*}
+ * @returns {Any*} a promise for x and y if they are the same, but a rejection
+ * otherwise.
+ *
+ */
+Q.join = function (x, y) {
+    return Q(x).join(y);
+};
+
+Promise.prototype.join = function (that) {
+    return Q([this, that]).spread(function (x, y) {
+        if (x === y) {
+            // TODO: "===" should be Object.is or equiv
+            return x;
+        } else {
+            throw new Error("Can't join: not the same: " + x + " " + y);
+        }
+    });
+};
+
+/**
+ * Returns a promise for the first of an array of promises to become settled.
+ * @param answers {Array[Any*]} promises to race
+ * @returns {Any*} the first promise to be settled
+ */
+Q.race = race;
+function race(answerPs) {
+    return promise(function(resolve, reject) {
+        // Switch to this once we can assume at least ES5
+        // answerPs.forEach(function(answerP) {
+        //     Q(answerP).then(resolve, reject);
+        // });
+        // Use this in the meantime
+        for (var i = 0, len = answerPs.length; i < len; i++) {
+            Q(answerPs[i]).then(resolve, reject);
+        }
+    });
+}
+
+Promise.prototype.race = function () {
+    return this.then(Q.race);
+};
+
+/**
+ * Constructs a Promise with a promise descriptor object and optional fallback
+ * function.  The descriptor contains methods like when(rejected), get(name),
+ * set(name, value), post(name, args), and delete(name), which all
+ * return either a value, a promise for a value, or a rejection.  The fallback
+ * accepts the operation name, a resolver, and any further arguments that would
+ * have been forwarded to the appropriate method above had a method been
+ * provided with the proper name.  The API makes no guarantees about the nature
+ * of the returned object, apart from that it is usable whereever promises are
+ * bought and sold.
+ */
+Q.makePromise = Promise;
+function Promise(descriptor, fallback, inspect) {
+    if (fallback === void 0) {
+        fallback = function (op) {
+            return reject(new Error(
+                "Promise does not support operation: " + op
+            ));
+        };
+    }
+    if (inspect === void 0) {
+        inspect = function () {
+            return {state: "unknown"};
+        };
+    }
+
+    var promise = object_create(Promise.prototype);
+
+    promise.promiseDispatch = function (resolve, op, args) {
+        var result;
+        try {
+            if (descriptor[op]) {
+                result = descriptor[op].apply(promise, args);
+            } else {
+                result = fallback.call(promise, op, args);
+            }
+        } catch (exception) {
+            result = reject(exception);
+        }
+        if (resolve) {
+            resolve(result);
+        }
+    };
+
+    promise.inspect = inspect;
+
+    // XXX deprecated `valueOf` and `exception` support
+    if (inspect) {
+        var inspected = inspect();
+        if (inspected.state === "rejected") {
+            promise.exception = inspected.reason;
+        }
+
+        promise.valueOf = function () {
+            var inspected = inspect();
+            if (inspected.state === "pending" ||
+                inspected.state === "rejected") {
+                return promise;
+            }
+            return inspected.value;
+        };
+    }
+
+    return promise;
+}
+
+Promise.prototype.toString = function () {
+    return "[object Promise]";
+};
+
+Promise.prototype.then = function (fulfilled, rejected, progressed) {
+    var self = this;
+    var deferred = defer();
+    var done = false;   // ensure the untrusted promise makes at most a
+                        // single call to one of the callbacks
+
+    function _fulfilled(value) {
+        try {
+            return typeof fulfilled === "function" ? fulfilled(value) : value;
+        } catch (exception) {
+            return reject(exception);
+        }
+    }
+
+    function _rejected(exception) {
+        if (typeof rejected === "function") {
+            makeStackTraceLong(exception, self);
+            try {
+                return rejected(exception);
+            } catch (newException) {
+                return reject(newException);
+            }
+        }
+        return reject(exception);
+    }
+
+    function _progressed(value) {
+        return typeof progressed === "function" ? progressed(value) : value;
+    }
+
+    Q.nextTick(function () {
+        self.promiseDispatch(function (value) {
+            if (done) {
+                return;
+            }
+            done = true;
+
+            deferred.resolve(_fulfilled(value));
+        }, "when", [function (exception) {
+            if (done) {
+                return;
+            }
+            done = true;
+
+            deferred.resolve(_rejected(exception));
+        }]);
+    });
+
+    // Progress propagator need to be attached in the current tick.
+    self.promiseDispatch(void 0, "when", [void 0, function (value) {
+        var newValue;
+        var threw = false;
+        try {
+            newValue = _progressed(value);
+        } catch (e) {
+            threw = true;
+            if (Q.onerror) {
+                Q.onerror(e);
+            } else {
+                throw e;
+            }
+        }
+
+        if (!threw) {
+            deferred.notify(newValue);
+        }
+    }]);
+
+    return deferred.promise;
+};
+
+Q.tap = function (promise, callback) {
+    return Q(promise).tap(callback);
+};
+
+/**
+ * Works almost like "finally", but not called for rejections.
+ * Original resolution value is passed through callback unaffected.
+ * Callback may return a promise that will be awaited for.
+ * @param {Function} callback
+ * @returns {Q.Promise}
+ * @example
+ * doSomething()
+ *   .then(...)
+ *   .tap(console.log)
+ *   .then(...);
+ */
+Promise.prototype.tap = function (callback) {
+    callback = Q(callback);
+
+    return this.then(function (value) {
+        return callback.fcall(value).thenResolve(value);
+    });
+};
+
+/**
+ * Registers an observer on a promise.
+ *
+ * Guarantees:
+ *
+ * 1. that fulfilled and rejected will be called only once.
+ * 2. that either the fulfilled callback or the rejected callback will be
+ *    called, but not both.
+ * 3. that fulfilled and rejected will not be called in this turn.
+ *
+ * @param value      promise or immediate reference to observe
+ * @param fulfilled  function to be called with the fulfilled value
+ * @param rejected   function to be called with the rejection exception
+ * @param progressed function to be called on any progress notifications
+ * @return promise for the return value from the invoked callback
+ */
+Q.when = when;
+function when(value, fulfilled, rejected, progressed) {
+    return Q(value).then(fulfilled, rejected, progressed);
+}
+
+Promise.prototype.thenResolve = function (value) {
+    return this.then(function () { return value; });
+};
+
+Q.thenResolve = function (promise, value) {
+    return Q(promise).thenResolve(value);
+};
+
+Promise.prototype.thenReject = function (reason) {
+    return this.then(function () { throw reason; });
+};
+
+Q.thenReject = function (promise, reason) {
+    return Q(promise).thenReject(reason);
+};
+
+/**
+ * If an object is not a promise, it is as "near" as possible.
+ * If a promise is rejected, it is as "near" as possible too.
+ * If it’s a fulfilled promise, the fulfillment value is nearer.
+ * If it’s a deferred promise and the deferred has been resolved, the
+ * resolution is "nearer".
+ * @param object
+ * @returns most resolved (nearest) form of the object
+ */
+
+// XXX should we re-do this?
+Q.nearer = nearer;
+function nearer(value) {
+    if (isPromise(value)) {
+        var inspected = value.inspect();
+        if (inspected.state === "fulfilled") {
+            return inspected.value;
+        }
+    }
+    return value;
+}
+
+/**
+ * @returns whether the given object is a promise.
+ * Otherwise it is a fulfilled value.
+ */
+Q.isPromise = isPromise;
+function isPromise(object) {
+    return object instanceof Promise;
+}
+
+Q.isPromiseAlike = isPromiseAlike;
+function isPromiseAlike(object) {
+    return isObject(object) && typeof object.then === "function";
+}
+
+/**
+ * @returns whether the given object is a pending promise, meaning not
+ * fulfilled or rejected.
+ */
+Q.isPending = isPending;
+function isPending(object) {
+    return isPromise(object) && object.inspect().state === "pending";
+}
+
+Promise.prototype.isPending = function () {
+    return this.inspect().state === "pending";
+};
+
+/**
+ * @returns whether the given object is a value or fulfilled
+ * promise.
+ */
+Q.isFulfilled = isFulfilled;
+function isFulfilled(object) {
+    return !isPromise(object) || object.inspect().state === "fulfilled";
+}
+
+Promise.prototype.isFulfilled = function () {
+    return this.inspect().state === "fulfilled";
+};
+
+/**
+ * @returns whether the given object is a rejected promise.
+ */
+Q.isRejected = isRejected;
+function isRejected(object) {
+    return isPromise(object) && object.inspect().state === "rejected";
+}
+
+Promise.prototype.isRejected = function () {
+    return this.inspect().state === "rejected";
+};
+
+//// BEGIN UNHANDLED REJECTION TRACKING
+
+// This promise library consumes exceptions thrown in handlers so they can be
+// handled by a subsequent promise.  The exceptions get added to this array when
+// they are created, and removed when they are handled.  Note that in ES6 or
+// shimmed environments, this would naturally be a `Set`.
+var unhandledReasons = [];
+var unhandledRejections = [];
+var trackUnhandledRejections = true;
+
+function resetUnhandledRejections() {
+    unhandledReasons.length = 0;
+    unhandledRejections.length = 0;
+
+    if (!trackUnhandledRejections) {
+        trackUnhandledRejections = true;
+    }
+}
+
+function trackRejection(promise, reason) {
+    if (!trackUnhandledRejections) {
+        return;
+    }
+
+    unhandledRejections.push(promise);
+    if (reason && typeof reason.stack !== "undefined") {
+        unhandledReasons.push(reason.stack);
+    } else {
+        unhandledReasons.push("(no stack) " + reason);
+    }
+}
+
+function untrackRejection(promise) {
+    if (!trackUnhandledRejections) {
+        return;
+    }
+
+    var at = array_indexOf(unhandledRejections, promise);
+    if (at !== -1) {
+        unhandledRejections.splice(at, 1);
+        unhandledReasons.splice(at, 1);
+    }
+}
+
+Q.resetUnhandledRejections = resetUnhandledRejections;
+
+Q.getUnhandledReasons = function () {
+    // Make a copy so that consumers can't interfere with our internal state.
+    return unhandledReasons.slice();
+};
+
+Q.stopUnhandledRejectionTracking = function () {
+    resetUnhandledRejections();
+    trackUnhandledRejections = false;
+};
+
+resetUnhandledRejections();
+
+//// END UNHANDLED REJECTION TRACKING
+
+/**
+ * Constructs a rejected promise.
+ * @param reason value describing the failure
+ */
+Q.reject = reject;
+function reject(reason) {
+    var rejection = Promise({
+        "when": function (rejected) {
+            // note that the error has been handled
+            if (rejected) {
+                untrackRejection(this);
+            }
+            return rejected ? rejected(reason) : this;
+        }
+    }, function fallback() {
+        return this;
+    }, function inspect() {
+        return { state: "rejected", reason: reason };
+    });
+
+    // Note that the reason has not been handled.
+    trackRejection(rejection, reason);
+
+    return rejection;
+}
+
+/**
+ * Constructs a fulfilled promise for an immediate reference.
+ * @param value immediate reference
+ */
+Q.fulfill = fulfill;
+function fulfill(value) {
+    return Promise({
+        "when": function () {
+            return value;
+        },
+        "get": function (name) {
+            return value[name];
+        },
+        "set": function (name, rhs) {
+            value[name] = rhs;
+        },
+        "delete": function (name) {
+            delete value[name];
+        },
+        "post": function (name, args) {
+            // Mark Miller proposes that post with no name should apply a
+            // promised function.
+            if (name === null || name === void 0) {
+                return value.apply(void 0, args);
+            } else {
+                return value[name].apply(value, args);
+            }
+        },
+        "apply": function (thisp, args) {
+            return value.apply(thisp, args);
+        },
+        "keys": function () {
+            return object_keys(value);
+        }
+    }, void 0, function inspect() {
+        return { state: "fulfilled", value: value };
+    });
+}
+
+/**
+ * Converts thenables to Q promises.
+ * @param promise thenable promise
+ * @returns a Q promise
+ */
+function coerce(promise) {
+    var deferred = defer();
+    Q.nextTick(function () {
+        try {
+            promise.then(deferred.resolve, deferred.reject, deferred.notify);
+        } catch (exception) {
+            deferred.reject(exception);
+        }
+    });
+    return deferred.promise;
+}
+
+/**
+ * Annotates an object such that it will never be
+ * transferred away from this process over any promise
+ * communication channel.
+ * @param object
+ * @returns promise a wrapping of that object that
+ * additionally responds to the "isDef" message
+ * without a rejection.
+ */
+Q.master = master;
+function master(object) {
+    return Promise({
+        "isDef": function () {}
+    }, function fallback(op, args) {
+        return dispatch(object, op, args);
+    }, function () {
+        return Q(object).inspect();
+    });
+}
+
+/**
+ * Spreads the values of a promised array of arguments into the
+ * fulfillment callback.
+ * @param fulfilled callback that receives variadic arguments from the
+ * promised array
+ * @param rejected callback that receives the exception if the promise
+ * is rejected.
+ * @returns a promise for the return value or thrown exception of
+ * either callback.
+ */
+Q.spread = spread;
+function spread(value, fulfilled, rejected) {
+    return Q(value).spread(fulfilled, rejected);
+}
+
+Promise.prototype.spread = function (fulfilled, rejected) {
+    return this.all().then(function (array) {
+        return fulfilled.apply(void 0, array);
+    }, rejected);
+};
+
+/**
+ * The async function is a decorator for generator functions, turning
+ * them into asynchronous generators.  Although generators are only part
+ * of the newest ECMAScript 6 drafts, this code does not cause syntax
+ * errors in older engines.  This code should continue to work and will
+ * in fact improve over time as the language improves.
+ *
+ * ES6 generators are currently part of V8 version 3.19 with the
+ * --harmony-generators runtime flag enabled.  SpiderMonkey has had them
+ * for longer, but under an older Python-inspired form.  This function
+ * works on both kinds of generators.
+ *
+ * Decorates a generator function such that:
+ *  - it may yield promises
+ *  - execution will continue when that promise is fulfilled
+ *  - the value of the yield expression will be the fulfilled value
+ *  - it returns a promise for the return value (when the generator
+ *    stops iterating)
+ *  - the decorated function returns a promise for the return value
+ *    of the generator or the first rejected promise among those
+ *    yielded.
+ *  - if an error is thrown in the generator, it propagates through
+ *    every following yield until it is caught, or until it escapes
+ *    the generator function altogether, and is translated into a
+ *    rejection for the promise returned by the decorated generator.
+ */
+Q.async = async;
+function async(makeGenerator) {
+    return function () {
+        // when verb is "send", arg is a value
+        // when verb is "throw", arg is an exception
+        function continuer(verb, arg) {
+            var result;
+
+            // Until V8 3.19 / Chromium 29 is released, SpiderMonkey is the only
+            // engine that has a deployed base of browsers that support generators.
+            // However, SM's generators use the Python-inspired semantics of
+            // outdated ES6 drafts.  We would like to support ES6, but we'd also
+            // like to make it possible to use generators in deployed browsers, so
+            // we also support Python-style generators.  At some point we can remove
+            // this block.
+
+            if (typeof StopIteration === "undefined") {
+                // ES6 Generators
+                try {
+                    result = generator[verb](arg);
+                } catch (exception) {
+                    return reject(exception);
+                }
+                if (result.done) {
+                    return Q(result.value);
+                } else {
+                    return when(result.value, callback, errback);
+                }
+            } else {
+                // SpiderMonkey Generators
+                // FIXME: Remove this case when SM does ES6 generators.
+                try {
+                    result = generator[verb](arg);
+                } catch (exception) {
+                    if (isStopIteration(exception)) {
+                        return Q(exception.value);
+                    } else {
+                        return reject(exception);
+                    }
+                }
+                return when(result, callback, errback);
+            }
+        }
+        var generator = makeGenerator.apply(this, arguments);
+        var callback = continuer.bind(continuer, "next");
+        var errback = continuer.bind(continuer, "throw");
+        return callback();
+    };
+}
+
+/**
+ * The spawn function is a small wrapper around async that immediately
+ * calls the generator and also ends the promise chain, so that any
+ * unhandled errors are thrown instead of forwarded to the error
+ * handler. This is useful because it's extremely common to run
+ * generators at the top-level to work with libraries.
+ */
+Q.spawn = spawn;
+function spawn(makeGenerator) {
+    Q.done(Q.async(makeGenerator)());
+}
+
+// FIXME: Remove this interface once ES6 generators are in SpiderMonkey.
+/**
+ * Throws a ReturnValue exception to stop an asynchronous generator.
+ *
+ * This interface is a stop-gap measure to support generator return
+ * values in older Firefox/SpiderMonkey.  In browsers that support ES6
+ * generators like Chromium 29, just use "return" in your generator
+ * functions.
+ *
+ * @param value the return value for the surrounding generator
+ * @throws ReturnValue exception with the value.
+ * @example
+ * // ES6 style
+ * Q.async(function* () {
+ *      var foo = yield getFooPromise();
+ *      var bar = yield getBarPromise();
+ *      return foo + bar;
+ * })
+ * // Older SpiderMonkey style
+ * Q.async(function () {
+ *      var foo = yield getFooPromise();
+ *      var bar = yield getBarPromise();
+ *      Q.return(foo + bar);
+ * })
+ */
+Q["return"] = _return;
+function _return(value) {
+    throw new QReturnValue(value);
+}
+
+/**
+ * The promised function decorator ensures that any promise arguments
+ * are settled and passed as values (`this` is also settled and passed
+ * as a value).  It will also ensure that the result of a function is
+ * always a promise.
+ *
+ * @example
+ * var add = Q.promised(function (a, b) {
+ *     return a + b;
+ * });
+ * add(Q(a), Q(B));
+ *
+ * @param {function} callback The function to decorate
+ * @returns {function} a function that has been decorated.
+ */
+Q.promised = promised;
+function promised(callback) {
+    return function () {
+        return spread([this, all(arguments)], function (self, args) {
+            return callback.apply(self, args);
+        });
+    };
+}
+
+/**
+ * sends a message to a value in a future turn
+ * @param object* the recipient
+ * @param op the name of the message operation, e.g., "when",
+ * @param args further arguments to be forwarded to the operation
+ * @returns result {Promise} a promise for the result of the operation
+ */
+Q.dispatch = dispatch;
+function dispatch(object, op, args) {
+    return Q(object).dispatch(op, args);
+}
+
+Promise.prototype.dispatch = function (op, args) {
+    var self = this;
+    var deferred = defer();
+    Q.nextTick(function () {
+        self.promiseDispatch(deferred.resolve, op, args);
+    });
+    return deferred.promise;
+};
+
+/**
+ * Gets the value of a property in a future turn.
+ * @param object    promise or immediate reference for target object
+ * @param name      name of property to get
+ * @return promise for the property value
+ */
+Q.get = function (object, key) {
+    return Q(object).dispatch("get", [key]);
+};
+
+Promise.prototype.get = function (key) {
+    return this.dispatch("get", [key]);
+};
+
+/**
+ * Sets the value of a property in a future turn.
+ * @param object    promise or immediate reference for object object
+ * @param name      name of property to set
+ * @param value     new value of property
+ * @return promise for the return value
+ */
+Q.set = function (object, key, value) {
+    return Q(object).dispatch("set", [key, value]);
+};
+
+Promise.prototype.set = function (key, value) {
+    return this.dispatch("set", [key, value]);
+};
+
+/**
+ * Deletes a property in a future turn.
+ * @param object    promise or immediate reference for target object
+ * @param name      name of property to delete
+ * @return promise for the return value
+ */
+Q.del = // XXX legacy
+Q["delete"] = function (object, key) {
+    return Q(object).dispatch("delete", [key]);
+};
+
+Promise.prototype.del = // XXX legacy
+Promise.prototype["delete"] = function (key) {
+    return this.dispatch("delete", [key]);
+};
+
+/**
+ * Invokes a method in a future turn.
+ * @param object    promise or immediate reference for target object
+ * @param name      name of method to invoke
+ * @param value     a value to post, typically an array of
+ *                  invocation arguments for promises that
+ *                  are ultimately backed with `resolve` values,
+ *                  as opposed to those backed with URLs
+ *                  wherein the posted value can be any
+ *                  JSON serializable object.
+ * @return promise for the return value
+ */
+// bound locally because it is used by other methods
+Q.mapply = // XXX As proposed by "Redsandro"
+Q.post = function (object, name, args) {
+    return Q(object).dispatch("post", [name, args]);
+};
+
+Promise.prototype.mapply = // XXX As proposed by "Redsandro"
+Promise.prototype.post = function (name, args) {
+    return this.dispatch("post", [name, args]);
+};
+
+/**
+ * Invokes a method in a future turn.
+ * @param object    promise or immediate reference for target object
+ * @param name      name of method to invoke
+ * @param ...args   array of invocation arguments
+ * @return promise for the return value
+ */
+Q.send = // XXX Mark Miller's proposed parlance
+Q.mcall = // XXX As proposed by "Redsandro"
+Q.invoke = function (object, name /*...args*/) {
+    return Q(object).dispatch("post", [name, array_slice(arguments, 2)]);
+};
+
+Promise.prototype.send = // XXX Mark Miller's proposed parlance
+Promise.prototype.mcall = // XXX As proposed by "Redsandro"
+Promise.prototype.invoke = function (name /*...args*/) {
+    return this.dispatch("post", [name, array_slice(arguments, 1)]);
+};
+
+/**
+ * Applies the promised function in a future turn.
+ * @param object    promise or immediate reference for target function
+ * @param args      array of application arguments
+ */
+Q.fapply = function (object, args) {
+    return Q(object).dispatch("apply", [void 0, args]);
+};
+
+Promise.prototype.fapply = function (args) {
+    return this.dispatch("apply", [void 0, args]);
+};
+
+/**
+ * Calls the promised function in a future turn.
+ * @param object    promise or immediate reference for target function
+ * @param ...args   array of application arguments
+ */
+Q["try"] =
+Q.fcall = function (object /* ...args*/) {
+    return Q(object).dispatch("apply", [void 0, array_slice(arguments, 1)]);
+};
+
+Promise.prototype.fcall = function (/*...args*/) {
+    return this.dispatch("apply", [void 0, array_slice(arguments)]);
+};
+
+/**
+ * Binds the promised function, transforming return values into a fulfilled
+ * promise and thrown errors into a rejected one.
+ * @param object    promise or immediate reference for target function
+ * @param ...args   array of application arguments
+ */
+Q.fbind = function (object /*...args*/) {
+    var promise = Q(object);
+    var args = array_slice(arguments, 1);
+    return function fbound() {
+        return promise.dispatch("apply", [
+            this,
+            args.concat(array_slice(arguments))
+        ]);
+    };
+};
+Promise.prototype.fbind = function (/*...args*/) {
+    var promise = this;
+    var args = array_slice(arguments);
+    return function fbound() {
+        return promise.dispatch("apply", [
+            this,
+            args.concat(array_slice(arguments))
+        ]);
+    };
+};
+
+/**
+ * Requests the names of the owned properties of a promised
+ * object in a future turn.
+ * @param object    promise or immediate reference for target object
+ * @return promise for the keys of the eventually settled object
+ */
+Q.keys = function (object) {
+    return Q(object).dispatch("keys", []);
+};
+
+Promise.prototype.keys = function () {
+    return this.dispatch("keys", []);
+};
+
+/**
+ * Turns an array of promises into a promise for an array.  If any of
+ * the promises gets rejected, the whole array is rejected immediately.
+ * @param {Array*} an array (or promise for an array) of values (or
+ * promises for values)
+ * @returns a promise for an array of the corresponding values
+ */
+// By Mark Miller
+// http://wiki.ecmascript.org/doku.php?id=strawman:concurrency&rev=1308776521#allfulfilled
+Q.all = all;
+function all(promises) {
+    return when(promises, function (promises) {
+        var countDown = 0;
+        var deferred = defer();
+        array_reduce(promises, function (undefined, promise, index) {
+            var snapshot;
+            if (
+                isPromise(promise) &&
+                (snapshot = promise.inspect()).state === "fulfilled"
+            ) {
+                promises[index] = snapshot.value;
+            } else {
+                ++countDown;
+                when(
+                    promise,
+                    function (value) {
+                        promises[index] = value;
+                        if (--countDown === 0) {
+                            deferred.resolve(promises);
+                        }
+                    },
+                    deferred.reject,
+                    function (progress) {
+                        deferred.notify({ index: index, value: progress });
+                    }
+                );
+            }
+        }, void 0);
+        if (countDown === 0) {
+            deferred.resolve(promises);
+        }
+        return deferred.promise;
+    });
+}
+
+Promise.prototype.all = function () {
+    return all(this);
+};
+
+/**
+ * Waits for all promises to be settled, either fulfilled or
+ * rejected.  This is distinct from `all` since that would stop
+ * waiting at the first rejection.  The promise returned by
+ * `allResolved` will never be rejected.
+ * @param promises a promise for an array (or an array) of promises
+ * (or values)
+ * @return a promise for an array of promises
+ */
+Q.allResolved = deprecate(allResolved, "allResolved", "allSettled");
+function allResolved(promises) {
+    return when(promises, function (promises) {
+        promises = array_map(promises, Q);
+        return when(all(array_map(promises, function (promise) {
+            return when(promise, noop, noop);
+        })), function () {
+            return promises;
+        });
+    });
+}
+
+Promise.prototype.allResolved = function () {
+    return allResolved(this);
+};
+
+/**
+ * @see Promise#allSettled
+ */
+Q.allSettled = allSettled;
+function allSettled(promises) {
+    return Q(promises).allSettled();
+}
+
+/**
+ * Turns an array of promises into a promise for an array of their states (as
+ * returned by `inspect`) when they have all settled.
+ * @param {Array[Any*]} values an array (or promise for an array) of values (or
+ * promises for values)
+ * @returns {Array[State]} an array of states for the respective values.
+ */
+Promise.prototype.allSettled = function () {
+    return this.then(function (promises) {
+        return all(array_map(promises, function (promise) {
+            promise = Q(promise);
+            function regardless() {
+                return promise.inspect();
+            }
+            return promise.then(regardless, regardless);
+        }));
+    });
+};
+
+/**
+ * Captures the failure of a promise, giving an oportunity to recover
+ * with a callback.  If the given promise is fulfilled, the returned
+ * promise is fulfilled.
+ * @param {Any*} promise for something
+ * @param {Function} callback to fulfill the returned promise if the
+ * given promise is rejected
+ * @returns a promise for the return value of the callback
+ */
+Q.fail = // XXX legacy
+Q["catch"] = function (object, rejected) {
+    return Q(object).then(void 0, rejected);
+};
+
+Promise.prototype.fail = // XXX legacy
+Promise.prototype["catch"] = function (rejected) {
+    return this.then(void 0, rejected);
+};
+
+/**
+ * Attaches a listener that can respond to progress notifications from a
+ * promise's originating deferred. This listener receives the exact arguments
+ * passed to ``deferred.notify``.
+ * @param {Any*} promise for something
+ * @param {Function} callback to receive any progress notifications
+ * @returns the given promise, unchanged
+ */
+Q.progress = progress;
+function progress(object, progressed) {
+    return Q(object).then(void 0, void 0, progressed);
+}
+
+Promise.prototype.progress = function (progressed) {
+    return this.then(void 0, void 0, progressed);
+};
+
+/**
+ * Provides an opportunity to observe the settling of a promise,
+ * regardless of whether the promise is fulfilled or rejected.  Forwards
+ * the resolution to the returned promise when the callback is done.
+ * The callback can return a promise to defer completion.
+ * @param {Any*} promise
+ * @param {Function} callback to observe the resolution of the given
+ * promise, takes no arguments.
+ * @returns a promise for the resolution of the given promise when
+ * ``fin`` is done.
+ */
+Q.fin = // XXX legacy
+Q["finally"] = function (object, callback) {
+    return Q(object)["finally"](callback);
+};
+
+Promise.prototype.fin = // XXX legacy
+Promise.prototype["finally"] = function (callback) {
+    callback = Q(callback);
+    return this.then(function (value) {
+        return callback.fcall().then(function () {
+            return value;
+        });
+    }, function (reason) {
+        // TODO attempt to recycle the rejection with "this".
+        return callback.fcall().then(function () {
+            throw reason;
+        });
+    });
+};
+
+/**
+ * Terminates a chain of promises, forcing rejections to be
+ * thrown as exceptions.
+ * @param {Any*} promise at the end of a chain of promises
+ * @returns nothing
+ */
+Q.done = function (object, fulfilled, rejected, progress) {
+    return Q(object).done(fulfilled, rejected, progress);
+};
+
+Promise.prototype.done = function (fulfilled, rejected, progress) {
+    var onUnhandledError = function (error) {
+        // forward to a future turn so that ``when``
+        // does not catch it and turn it into a rejection.
+        Q.nextTick(function () {
+            makeStackTraceLong(error, promise);
+            if (Q.onerror) {
+                Q.onerror(error);
+            } else {
+                throw error;
+            }
+        });
+    };
+
+    // Avoid unnecessary `nextTick`ing via an unnecessary `when`.
+    var promise = fulfilled || rejected || progress ?
+        this.then(fulfilled, rejected, progress) :
+        this;
+
+    if (typeof process === "object" && process && process.domain) {
+        onUnhandledError = process.domain.bind(onUnhandledError);
+    }
+
+    promise.then(void 0, onUnhandledError);
+};
+
+/**
+ * Causes a promise to be rejected if it does not get fulfilled before
+ * some milliseconds time out.
+ * @param {Any*} promise
+ * @param {Number} milliseconds timeout
+ * @param {Any*} custom error message or Error object (optional)
+ * @returns a promise for the resolution of the given promise if it is
+ * fulfilled before the timeout, otherwise rejected.
+ */
+Q.timeout = function (object, ms, error) {
+    return Q(object).timeout(ms, error);
+};
+
+Promise.prototype.timeout = function (ms, error) {
+    var deferred = defer();
+    var timeoutId = setTimeout(function () {
+        if (!error || "string" === typeof error) {
+            error = new Error(error || "Timed out after " + ms + " ms");
+            error.code = "ETIMEDOUT";
+        }
+        deferred.reject(error);
+    }, ms);
+
+    this.then(function (value) {
+        clearTimeout(timeoutId);
+        deferred.resolve(value);
+    }, function (exception) {
+        clearTimeout(timeoutId);
+        deferred.reject(exception);
+    }, deferred.notify);
+
+    return deferred.promise;
+};
+
+/**
+ * Returns a promise for the given value (or promised value), some
+ * milliseconds after it resolved. Passes rejections immediately.
+ * @param {Any*} promise
+ * @param {Number} milliseconds
+ * @returns a promise for the resolution of the given promise after milliseconds
+ * time has elapsed since the resolution of the given promise.
+ * If the given promise rejects, that is passed immediately.
+ */
+Q.delay = function (object, timeout) {
+    if (timeout === void 0) {
+        timeout = object;
+        object = void 0;
+    }
+    return Q(object).delay(timeout);
+};
+
+Promise.prototype.delay = function (timeout) {
+    return this.then(function (value) {
+        var deferred = defer();
+        setTimeout(function () {
+            deferred.resolve(value);
+        }, timeout);
+        return deferred.promise;
+    });
+};
+
+/**
+ * Passes a continuation to a Node function, which is called with the given
+ * arguments provided as an array, and returns a promise.
+ *
+ *      Q.nfapply(FS.readFile, [__filename])
+ *      .then(function (content) {
+ *      })
+ *
+ */
+Q.nfapply = function (callback, args) {
+    return Q(callback).nfapply(args);
+};
+
+Promise.prototype.nfapply = function (args) {
+    var deferred = defer();
+    var nodeArgs = array_slice(args);
+    nodeArgs.push(deferred.makeNodeResolver());
+    this.fapply(nodeArgs).fail(deferred.reject);
+    return deferred.promise;
+};
+
+/**
+ * Passes a continuation to a Node function, which is called with the given
+ * arguments provided individually, and returns a promise.
+ * @example
+ * Q.nfcall(FS.readFile, __filename)
+ * .then(function (content) {
+ * })
+ *
+ */
+Q.nfcall = function (callback /*...args*/) {
+    var args = array_slice(arguments, 1);
+    return Q(callback).nfapply(args);
+};
+
+Promise.prototype.nfcall = function (/*...args*/) {
+    var nodeArgs = array_slice(arguments);
+    var deferred = defer();
+    nodeArgs.push(deferred.makeNodeResolver());
+    this.fapply(nodeArgs).fail(deferred.reject);
+    return deferred.promise;
+};
+
+/**
+ * Wraps a NodeJS continuation passing function and returns an equivalent
+ * version that returns a promise.
+ * @example
+ * Q.nfbind(FS.readFile, __filename)("utf-8")
+ * .then(console.log)
+ * .done()
+ */
+Q.nfbind =
+Q.denodeify = function (callback /*...args*/) {
+    var baseArgs = array_slice(arguments, 1);
+    return function () {
+        var nodeArgs = baseArgs.concat(array_slice(arguments));
+        var deferred = defer();
+        nodeArgs.push(deferred.makeNodeResolver());
+        Q(callback).fapply(nodeArgs).fail(deferred.reject);
+        return deferred.promise;
+    };
+};
+
+Promise.prototype.nfbind =
+Promise.prototype.denodeify = function (/*...args*/) {
+    var args = array_slice(arguments);
+    args.unshift(this);
+    return Q.denodeify.apply(void 0, args);
+};
+
+Q.nbind = function (callback, thisp /*...args*/) {
+    var baseArgs = array_slice(arguments, 2);
+    return function () {
+        var nodeArgs = baseArgs.concat(array_slice(arguments));
+        var deferred = defer();
+        nodeArgs.push(deferred.makeNodeResolver());
+        function bound() {
+            return callback.apply(thisp, arguments);
+        }
+        Q(bound).fapply(nodeArgs).fail(deferred.reject);
+        return deferred.promise;
+    };
+};
+
+Promise.prototype.nbind = function (/*thisp, ...args*/) {
+    var args = array_slice(arguments, 0);
+    args.unshift(this);
+    return Q.nbind.apply(void 0, args);
+};
+
+/**
+ * Calls a method of a Node-style object that accepts a Node-style
+ * callback with a given array of arguments, plus a provided callback.
+ * @param object an object that has the named method
+ * @param {String} name name of the method of object
+ * @param {Array} args arguments to pass to the method; the callback
+ * will be provided by Q and appended to these arguments.
+ * @returns a promise for the value or error
+ */
+Q.nmapply = // XXX As proposed by "Redsandro"
+Q.npost = function (object, name, args) {
+    return Q(object).npost(name, args);
+};
+
+Promise.prototype.nmapply = // XXX As proposed by "Redsandro"
+Promise.prototype.npost = function (name, args) {
+    var nodeArgs = array_slice(args || []);
+    var deferred = defer();
+    nodeArgs.push(deferred.makeNodeResolver());
+    this.dispatch("post", [name, nodeArgs]).fail(deferred.reject);
+    return deferred.promise;
+};
+
+/**
+ * Calls a method of a Node-style object that accepts a Node-style
+ * callback, forwarding the given variadic arguments, plus a provided
+ * callback argument.
+ * @param object an object that has the named method
+ * @param {String} name name of the method of object
+ * @param ...args arguments to pass to the method; the callback will
+ * be provided by Q and appended to these arguments.
+ * @returns a promise for the value or error
+ */
+Q.nsend = // XXX Based on Mark Miller's proposed "send"
+Q.nmcall = // XXX Based on "Redsandro's" proposal
+Q.ninvoke = function (object, name /*...args*/) {
+    var nodeArgs = array_slice(arguments, 2);
+    var deferred = defer();
+    nodeArgs.push(deferred.makeNodeResolver());
+    Q(object).dispatch("post", [name, nodeArgs]).fail(deferred.reject);
+    return deferred.promise;
+};
+
+Promise.prototype.nsend = // XXX Based on Mark Miller's proposed "send"
+Promise.prototype.nmcall = // XXX Based on "Redsandro's" proposal
+Promise.prototype.ninvoke = function (name /*...args*/) {
+    var nodeArgs = array_slice(arguments, 1);
+    var deferred = defer();
+    nodeArgs.push(deferred.makeNodeResolver());
+    this.dispatch("post", [name, nodeArgs]).fail(deferred.reject);
+    return deferred.promise;
+};
+
+/**
+ * If a function would like to support both Node continuation-passing-style and
+ * promise-returning-style, it can end its internal promise chain with
+ * `nodeify(nodeback)`, forwarding the optional nodeback argument.  If the user
+ * elects to use a nodeback, the result will be sent there.  If they do not
+ * pass a nodeback, they will receive the result promise.
+ * @param object a result (or a promise for a result)
+ * @param {Function} nodeback a Node.js-style callback
+ * @returns either the promise or nothing
+ */
+Q.nodeify = nodeify;
+function nodeify(object, nodeback) {
+    return Q(object).nodeify(nodeback);
+}
+
+Promise.prototype.nodeify = function (nodeback) {
+    if (nodeback) {
+        this.then(function (value) {
+            Q.nextTick(function () {
+                nodeback(null, value);
+            });
+        }, function (error) {
+            Q.nextTick(function () {
+                nodeback(error);
+            });
+        });
+    } else {
+        return this;
+    }
+};
+
+// All code before this point will be filtered from stack traces.
+var qEndingLine = captureLine();
+
+return Q;
+
+});
+
+}).call(this,require('_process'))
+},{"_process":188}],2:[function(require,module,exports){
 
 module.exports = require('./lib/');
 
-},{"./lib/":2}],2:[function(require,module,exports){
+},{"./lib/":3}],3:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -91,7 +2032,7 @@ exports.connect = lookup;
 exports.Manager = require('./manager');
 exports.Socket = require('./socket');
 
-},{"./manager":3,"./socket":5,"./url":6,"debug":9,"socket.io-parser":43}],3:[function(require,module,exports){
+},{"./manager":4,"./socket":6,"./url":7,"debug":10,"socket.io-parser":44}],4:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -566,7 +2507,7 @@ Manager.prototype.onreconnect = function(){
   this.emitAll('reconnect', attempt);
 };
 
-},{"./on":4,"./socket":5,"./url":6,"component-bind":7,"component-emitter":8,"debug":9,"engine.io-client":10,"indexof":39,"object-component":40,"socket.io-parser":43}],4:[function(require,module,exports){
+},{"./on":5,"./socket":6,"./url":7,"component-bind":8,"component-emitter":9,"debug":10,"engine.io-client":11,"indexof":40,"object-component":41,"socket.io-parser":44}],5:[function(require,module,exports){
 
 /**
  * Module exports.
@@ -592,7 +2533,7 @@ function on(obj, ev, fn) {
   };
 }
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -978,7 +2919,7 @@ Socket.prototype.disconnect = function(){
   return this;
 };
 
-},{"./on":4,"component-bind":7,"component-emitter":8,"debug":9,"has-binary":37,"socket.io-parser":43,"to-array":47}],6:[function(require,module,exports){
+},{"./on":5,"component-bind":8,"component-emitter":9,"debug":10,"has-binary":38,"socket.io-parser":44,"to-array":48}],7:[function(require,module,exports){
 (function (global){
 
 /**
@@ -1055,7 +2996,7 @@ function url(uri, loc){
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"debug":9,"parseuri":41}],7:[function(require,module,exports){
+},{"debug":10,"parseuri":42}],8:[function(require,module,exports){
 /**
  * Slice reference.
  */
@@ -1080,7 +3021,7 @@ module.exports = function(obj, fn){
   }
 };
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -1246,7 +3187,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 
 /**
  * Expose `debug()` as the module.
@@ -1385,11 +3326,11 @@ try {
   if (window.localStorage) debug.enable(localStorage.debug);
 } catch(e){}
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 
 module.exports =  require('./lib/');
 
-},{"./lib/":11}],11:[function(require,module,exports){
+},{"./lib/":12}],12:[function(require,module,exports){
 
 module.exports = require('./socket');
 
@@ -1401,7 +3342,7 @@ module.exports = require('./socket');
  */
 module.exports.parser = require('engine.io-parser');
 
-},{"./socket":12,"engine.io-parser":24}],12:[function(require,module,exports){
+},{"./socket":13,"engine.io-parser":25}],13:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -2088,7 +4029,7 @@ Socket.prototype.filterUpgrades = function (upgrades) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./transport":13,"./transports":14,"component-emitter":8,"debug":21,"engine.io-parser":24,"indexof":39,"parsejson":33,"parseqs":34,"parseuri":35}],13:[function(require,module,exports){
+},{"./transport":14,"./transports":15,"component-emitter":9,"debug":22,"engine.io-parser":25,"indexof":40,"parsejson":34,"parseqs":35,"parseuri":36}],14:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -2240,7 +4181,7 @@ Transport.prototype.onClose = function () {
   this.emit('close');
 };
 
-},{"component-emitter":8,"engine.io-parser":24}],14:[function(require,module,exports){
+},{"component-emitter":9,"engine.io-parser":25}],15:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies
@@ -2297,7 +4238,7 @@ function polling(opts){
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling-jsonp":15,"./polling-xhr":16,"./websocket":18,"xmlhttprequest":19}],15:[function(require,module,exports){
+},{"./polling-jsonp":16,"./polling-xhr":17,"./websocket":19,"xmlhttprequest":20}],16:[function(require,module,exports){
 (function (global){
 
 /**
@@ -2534,7 +4475,7 @@ JSONPPolling.prototype.doWrite = function (data, fn) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":17,"component-inherit":20}],16:[function(require,module,exports){
+},{"./polling":18,"component-inherit":21}],17:[function(require,module,exports){
 (function (global){
 /**
  * Module requirements.
@@ -2889,7 +4830,7 @@ function unloadHandler() {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":17,"component-emitter":8,"component-inherit":20,"debug":21,"xmlhttprequest":19}],17:[function(require,module,exports){
+},{"./polling":18,"component-emitter":9,"component-inherit":21,"debug":22,"xmlhttprequest":20}],18:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -3136,7 +5077,7 @@ Polling.prototype.uri = function(){
   return schema + '://' + this.hostname + port + this.path + query;
 };
 
-},{"../transport":13,"component-inherit":20,"debug":21,"engine.io-parser":24,"parseqs":34,"xmlhttprequest":19}],18:[function(require,module,exports){
+},{"../transport":14,"component-inherit":21,"debug":22,"engine.io-parser":25,"parseqs":35,"xmlhttprequest":20}],19:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -3367,7 +5308,7 @@ WS.prototype.check = function(){
   return !!WebSocket && !('__initialize' in WebSocket && this.name === WS.prototype.name);
 };
 
-},{"../transport":13,"component-inherit":20,"debug":21,"engine.io-parser":24,"parseqs":34,"ws":36}],19:[function(require,module,exports){
+},{"../transport":14,"component-inherit":21,"debug":22,"engine.io-parser":25,"parseqs":35,"ws":37}],20:[function(require,module,exports){
 // browser shim for xmlhttprequest module
 var hasCORS = require('has-cors');
 
@@ -3405,7 +5346,7 @@ module.exports = function(opts) {
   }
 }
 
-},{"has-cors":31}],20:[function(require,module,exports){
+},{"has-cors":32}],21:[function(require,module,exports){
 
 module.exports = function(a, b){
   var fn = function(){};
@@ -3413,7 +5354,7 @@ module.exports = function(a, b){
   a.prototype = new fn;
   a.prototype.constructor = a;
 };
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 
 /**
  * This is the web browser implementation of `debug()`.
@@ -3562,7 +5503,7 @@ function load() {
 
 exports.enable(load());
 
-},{"./debug":22}],22:[function(require,module,exports){
+},{"./debug":23}],23:[function(require,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -3761,7 +5702,7 @@ function coerce(val) {
   return val;
 }
 
-},{"ms":23}],23:[function(require,module,exports){
+},{"ms":24}],24:[function(require,module,exports){
 /**
  * Helpers.
  */
@@ -3874,7 +5815,7 @@ function plural(ms, n, name) {
   return Math.ceil(ms / n) + ' ' + name + 's';
 }
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -4444,7 +6385,7 @@ exports.decodePayloadAsBinary = function (data, binaryType, callback) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./keys":25,"after":26,"arraybuffer.slice":27,"base64-arraybuffer":28,"blob":29,"utf8":30}],25:[function(require,module,exports){
+},{"./keys":26,"after":27,"arraybuffer.slice":28,"base64-arraybuffer":29,"blob":30,"utf8":31}],26:[function(require,module,exports){
 
 /**
  * Gets the keys for an object.
@@ -4465,7 +6406,7 @@ module.exports = Object.keys || function keys (obj){
   return arr;
 };
 
-},{}],26:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 module.exports = after
 
 function after(count, callback, err_cb) {
@@ -4495,7 +6436,7 @@ function after(count, callback, err_cb) {
 
 function noop() {}
 
-},{}],27:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 /**
  * An abstraction for slicing an arraybuffer even when
  * ArrayBuffer.prototype.slice is not supported
@@ -4526,7 +6467,7 @@ module.exports = function(arraybuffer, start, end) {
   return result.buffer;
 };
 
-},{}],28:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 /*
  * base64-arraybuffer
  * https://github.com/niklasvh/base64-arraybuffer
@@ -4587,7 +6528,7 @@ module.exports = function(arraybuffer, start, end) {
   };
 })("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
 
-},{}],29:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 (function (global){
 /**
  * Create a blob builder even when vendor prefixes exist
@@ -4640,7 +6581,7 @@ module.exports = (function() {
 })();
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],30:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 (function (global){
 /*! http://mths.be/utf8js v2.0.0 by @mathias */
 ;(function(root) {
@@ -4883,7 +6824,7 @@ module.exports = (function() {
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],31:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -4908,7 +6849,7 @@ try {
   module.exports = false;
 }
 
-},{"global":32}],32:[function(require,module,exports){
+},{"global":33}],33:[function(require,module,exports){
 
 /**
  * Returns `this`. Execute this without a "context" (i.e. without it being
@@ -4918,7 +6859,7 @@ try {
 
 module.exports = (function () { return this; })();
 
-},{}],33:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 (function (global){
 /**
  * JSON parse.
@@ -4953,7 +6894,7 @@ module.exports = function parsejson(data) {
   }
 };
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],34:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 /**
  * Compiles a querystring
  * Returns string representation of the object
@@ -4992,7 +6933,7 @@ exports.decode = function(qs){
   return qry;
 };
 
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 /**
  * Parses an URI
  *
@@ -5033,7 +6974,7 @@ module.exports = function parseuri(str) {
     return uri;
 };
 
-},{}],36:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -5078,7 +7019,7 @@ function ws(uri, protocols, opts) {
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
-},{}],37:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 (function (global){
 
 /*
@@ -5140,12 +7081,12 @@ function hasBinary(data) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"isarray":38}],38:[function(require,module,exports){
+},{"isarray":39}],39:[function(require,module,exports){
 module.exports = Array.isArray || function (arr) {
   return Object.prototype.toString.call(arr) == '[object Array]';
 };
 
-},{}],39:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -5156,7 +7097,7 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],40:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 
 /**
  * HOP ref.
@@ -5241,7 +7182,7 @@ exports.length = function(obj){
 exports.isEmpty = function(obj){
   return 0 == exports.length(obj);
 };
-},{}],41:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 /**
  * Parses an URI
  *
@@ -5268,7 +7209,7 @@ module.exports = function parseuri(str) {
   return uri;
 };
 
-},{}],42:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 (function (global){
 /*global Blob,File*/
 
@@ -5413,7 +7354,7 @@ exports.removeBlobs = function(data, callback) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./is-buffer":44,"isarray":45}],43:[function(require,module,exports){
+},{"./is-buffer":45,"isarray":46}],44:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -5811,7 +7752,7 @@ function error(data){
   };
 }
 
-},{"./binary":42,"./is-buffer":44,"component-emitter":8,"debug":9,"isarray":45,"json3":46}],44:[function(require,module,exports){
+},{"./binary":43,"./is-buffer":45,"component-emitter":9,"debug":10,"isarray":46,"json3":47}],45:[function(require,module,exports){
 (function (global){
 
 module.exports = isBuf;
@@ -5828,9 +7769,9 @@ function isBuf(obj) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],45:[function(require,module,exports){
-module.exports=require(38)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\has-binary\\node_modules\\isarray\\index.js":38}],46:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
+module.exports=require(39)
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\has-binary\\node_modules\\isarray\\index.js":39}],47:[function(require,module,exports){
 /*! JSON v3.2.6 | http://bestiejs.github.io/json3 | Copyright 2012-2013, Kit Cambridge | http://kit.mit-license.org */
 ;(function (window) {
   // Convenience aliases.
@@ -6693,7 +8634,7 @@ module.exports=require(38)
   }
 }(this));
 
-},{}],47:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 module.exports = toArray
 
 function toArray(list, index) {
@@ -6708,11 +8649,88 @@ function toArray(list, index) {
     return array
 }
 
-},{}],48:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
+module.exports={
+  "name": "socket.io-client",
+  "version": "1.2.1",
+  "keywords": [
+    "realtime",
+    "framework",
+    "websocket",
+    "tcp",
+    "events",
+    "client"
+  ],
+  "dependencies": {
+    "debug": "0.7.4",
+    "engine.io-client": "1.4.3",
+    "component-bind": "1.0.0",
+    "component-emitter": "1.1.2",
+    "object-component": "0.0.3",
+    "socket.io-parser": "2.2.2",
+    "has-binary": "0.1.5",
+    "indexof": "0.0.1",
+    "parseuri": "0.0.2",
+    "to-array": "0.1.3"
+  },
+  "devDependencies": {
+    "socket.io": "1.2.1",
+    "mocha": "1.16.2",
+    "zuul": "1.10.2",
+    "istanbul": "0.2.1",
+    "expect.js": "0.2.0",
+    "uglify-js": "2.4.15",
+    "browserify": "4.2.1",
+    "base64-arraybuffer": "0.1.0",
+    "text-blob-builder": "0.0.1",
+    "has-cors": "1.0.3"
+  },
+  "scripts": {
+    "test": "make test"
+  },
+  "contributors": [
+    {
+      "name": "Guillermo Rauch",
+      "email": "rauchg@gmail.com"
+    },
+    {
+      "name": "Arnout Kazemier",
+      "email": "info@3rd-eden.com"
+    },
+    {
+      "name": "Vladimir Dronnikov",
+      "email": "dronnikov@gmail.com"
+    },
+    {
+      "name": "Einar Otto Stangvik",
+      "email": "einaros@gmail.com"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Automattic/socket.io-client.git"
+  },
+  "license": "MIT",
+  "readme": "\n# socket.io-client\n\n[![Build Status](https://secure.travis-ci.org/Automattic/socket.io-client.svg)](http://travis-ci.org/Automattic/socket.io-client)\n[![NPM version](https://badge.fury.io/js/socket.io-client.svg)](http://badge.fury.io/js/socket.io-client)\n![Downloads](http://img.shields.io/npm/dm/socket.io-client.svg)\n\n## How to use\n\nA standalone build of `socket.io-client` is exposed automatically by the\nsocket.io server as `/socket.io/socket.io.js`. Alternatively you can\nserve the file `socket.io.js` found at the root of this repository.\n\n```html\n<script src=\"/socket.io/socket.io.js\"></script>\n<script>\n  var socket = io('http://localhost');\n  socket.on('connect', function(){});\n  socket.on('event', function(data){});\n  socket.on('disconnect', function(){});\n</script>\n```\n\nSocket.IO is compatible with [browserify](http://browserify.org/).\n\n### Node.JS (server-side usage)\n\n  Add `socket.io-client` to your `package.json` and then:\n\n  ```js\n  var socket = require('socket.io-client')('http://localhost');\n  socket.on('connect', function(){});\n  socket.on('event', function(data){});\n  socket.on('disconnect', function(){});\n  ```\n\n## API\n\n### IO(url:String, opts:Object):Socket\n\n  Exposed as the `io` namespace in the standalone build, or the result\n  of calling `require('socket.io-client')`.\n\n  When called, it creates a new `Manager` for the given URL, and attempts\n  to reuse an existing `Manager` for subsequent calls, unless the\n  `multiplex` option is passed with `false`.\n\n  The rest of the options are passed to the `Manager` constructor (see below\n  for details).\n\n  A `Socket` instance is returned for the namespace specified by the\n  pathname in the URL, defaulting to `/`. For example, if the `url` is\n  `http://localhost/users`, a transport connection will be established to\n  `http://localhost` and a Socket.IO connection will be established to\n  `/users`.\n\n### IO#protocol\n\n  Socket.io protocol revision number this client works with.\n\n### IO#Socket\n\n  Reference to the `Socket` constructor.\n\n### IO#Manager\n\n  Reference to the `Manager` constructor.\n\n### IO#Emitter\n\n  Reference to the `Emitter` constructor.\n\n### Manager(url:String, opts:Object)\n\n  A `Manager` represents a connection to a given Socket.IO server. One or\n  more `Socket` instances are associated with the manager. The manager\n  can be accessed through the `io` property of each `Socket` instance.\n\n  The `opts` are also passed to `engine.io` upon initialization of the\n  underlying `Socket`.\n\n  Options:\n  - `reconnection` whether to reconnect automatically (`true`)\n  - `reconnectionDelay` how long to wait before attempting a new\n    reconnection (`1000`)\n  - `reconnectionDelayMax` maximum amount of time to wait between\n    reconnections (`5000`). Each attempt increases the reconnection by\n    the amount specified by `reconnectionDelay`.\n  - `timeout` connection timeout before a `connect_error`\n    and `connect_timeout` events are emitted (`20000`)\n  - `autoConnect` by setting this false, you have to call `manager.open`\n    whenever you decide it's appropriate\n\n#### Events\n\n  - `connect`. Fired upon a successful connection.\n  - `connect_error`. Fired upon a connection error.\n    Parameters:\n      - `Object` error object\n  - `connect_timeout`. Fired upon a connection timeout.\n  - `reconnect`. Fired upon a successful reconnection.\n    Parameters:\n      - `Number` reconnection attempt number\n  - `reconnect_attempt`. Fired upon an attempt to reconnect.\n  - `reconnecting`. Fired upon an attempt to reconnect.\n    Parameters:\n      - `Number` reconnection attempt number\n  - `reconnect_error`. Fired upon a reconnection attempt error.\n    Parameters:\n      - `Object` error object\n  - `reconnect_failed`. Fired when couldn't reconnect within `reconnectionAttempts`\n\nThe events above are also emitted on the individual sockets that\nreconnect that depend on this `Manager`.\n\n### Manager#reconnection(v:Boolean):Manager\n\n  Sets the `reconnection` option, or returns it if no parameters\n  are passed.\n\n### Manager#reconnectionAttempts(v:Boolean):Manager\n\n  Sets the `reconnectionAttempts` option, or returns it if no parameters\n  are passed.\n\n### Manager#reconnectionDelay(v:Boolean):Manager\n\n  Sets the `reconectionDelay` option, or returns it if no parameters\n  are passed.\n\n### Manager#reconnectionDelayMax(v:Boolean):Manager\n\n  Sets the `reconectionDelayMax` option, or returns it if no parameters\n  are passed.\n\n### Manager#timeout(v:Boolean):Manager\n\n  Sets the `timeout` option, or returns it if no parameters\n  are passed.\n\n### Socket\n\n#### Events\n\n  - `connect`. Fired upon a connection including a successful reconnection.\n  - `error`. Fired upon a connection error\n    Parameters:\n      - `Object` error data\n  - `disconnect`. Fired upon a disconnection.\n  - `reconnect`. Fired upon a successful reconnection.\n    Parameters:\n      - `Number` reconnection attempt number\n  - `reconnect_attempt`. Fired upon an attempt to reconnect.\n  - `reconnecting`. Fired upon an attempt to reconnect.\n    Parameters:\n      - `Number` reconnection attempt number\n  - `reconnect_error`. Fired upon a reconnection attempt error.\n    Parameters:\n      - `Object` error object\n  - `reconnect_failed`. Fired when couldn't reconnect within `reconnectionAttempts`\n\n## License\n\n[MIT](/LICENSE)\n",
+  "readmeFilename": "README.md",
+  "description": "[![Build Status](https://secure.travis-ci.org/Automattic/socket.io-client.svg)](http://travis-ci.org/Automattic/socket.io-client) [![NPM version](https://badge.fury.io/js/socket.io-client.svg)](http://badge.fury.io/js/socket.io-client) ![Downloads](http://img.shields.io/npm/dm/socket.io-client.svg)",
+  "bugs": {
+    "url": "https://github.com/Automattic/socket.io-client/issues"
+  },
+  "homepage": "https://github.com/Automattic/socket.io-client",
+  "_id": "socket.io-client@1.2.1",
+  "dist": {
+    "shasum": "240bd5d3a5e8cbf32c916ca16a9a48877bf1e2bf"
+  },
+  "_from": "socket.io-client@",
+  "_resolved": "https://registry.npmjs.org/socket.io-client/-/socket.io-client-1.2.1.tgz"
+}
+
+},{}],50:[function(require,module,exports){
 
 module.exports = require('./lib');
 
-},{"./lib":50}],49:[function(require,module,exports){
+},{"./lib":52}],51:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -6961,7 +8979,7 @@ Client.prototype.destroy = function(){
   this.decoder.removeListener('decoded', this.ondecoded);
 };
 
-},{"debug":53,"socket.io-parser":123}],50:[function(require,module,exports){
+},{"debug":55,"socket.io-parser":83}],52:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -7342,7 +9360,7 @@ Namespace.flags.forEach(function(flag){
 
 Server.listen = Server;
 
-},{"./client":49,"./namespace":51,"debug":53,"engine.io":54,"fs":133,"http":219,"socket.io-adapter":77,"socket.io-client":80,"socket.io-client/package":121,"url":243}],51:[function(require,module,exports){
+},{"./client":51,"./namespace":53,"debug":55,"engine.io":56,"fs":96,"http":182,"socket.io-adapter":79,"socket.io-client":2,"socket.io-client/package":49,"url":206}],53:[function(require,module,exports){
 (function (process){
 
 /**
@@ -7588,7 +9606,7 @@ Namespace.prototype.write = function(){
 };
 
 }).call(this,require('_process'))
-},{"./socket":52,"_process":225,"debug":53,"events":218,"has-binary-data":75,"socket.io-parser":123}],52:[function(require,module,exports){
+},{"./socket":54,"_process":188,"debug":55,"events":181,"has-binary-data":77,"socket.io-parser":83}],54:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -8031,9 +10049,9 @@ Socket.prototype.disconnect = function(close){
   return this;
 };
 
-},{"debug":53,"events":218,"has-binary-data":75,"socket.io-parser":123,"url":243}],53:[function(require,module,exports){
-module.exports=require(9)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\debug\\debug.js":9}],54:[function(require,module,exports){
+},{"debug":55,"events":181,"has-binary-data":77,"socket.io-parser":83,"url":206}],55:[function(require,module,exports){
+module.exports=require(10)
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\debug\\debug.js":10}],56:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -8161,7 +10179,7 @@ function attach(server, options) {
   return engine;
 };
 
-},{"./server":55,"./socket":56,"./transport":57,"./transports":58,"engine.io-parser":67,"http":219}],55:[function(require,module,exports){
+},{"./server":57,"./socket":58,"./transport":59,"./transports":60,"engine.io-parser":69,"http":182}],57:[function(require,module,exports){
 (function (Buffer){
 
 /**
@@ -8556,7 +10574,7 @@ Server.prototype.attach = function(server, options){
 };
 
 }).call(this,require("buffer").Buffer)
-},{"./socket":56,"./transports":58,"base64id":63,"buffer":136,"crypto":143,"debug":64,"events":218,"fs":133,"querystring":229,"url":243,"ws":74}],56:[function(require,module,exports){
+},{"./socket":58,"./transports":60,"base64id":65,"buffer":99,"crypto":106,"debug":66,"events":181,"fs":96,"querystring":192,"url":206,"ws":76}],58:[function(require,module,exports){
 (function (process){
 /**
  * Module dependencies.
@@ -8953,7 +10971,7 @@ Socket.prototype.closeTransport = function () {
 };
 
 }).call(this,require('_process'))
-},{"_process":225,"debug":64,"events":218}],57:[function(require,module,exports){
+},{"_process":188,"debug":66,"events":181}],59:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -9069,7 +11087,7 @@ Transport.prototype.onClose = function () {
   this.emit('close');
 };
 
-},{"debug":64,"engine.io-parser":67,"events":218}],58:[function(require,module,exports){
+},{"debug":66,"engine.io-parser":69,"events":181}],60:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -9107,7 +11125,7 @@ function polling (req) {
   }
 }
 
-},{"./polling-jsonp":59,"./polling-xhr":60,"./websocket":62}],59:[function(require,module,exports){
+},{"./polling-jsonp":61,"./polling-xhr":62,"./websocket":64}],61:[function(require,module,exports){
 (function (Buffer){
 
 /**
@@ -9219,7 +11237,7 @@ JSONP.prototype.headers = function (req, headers) {
 };
 
 }).call(this,require("buffer").Buffer)
-},{"./polling":61,"buffer":136,"querystring":229}],60:[function(require,module,exports){
+},{"./polling":63,"buffer":99,"querystring":192}],62:[function(require,module,exports){
 (function (Buffer){
 
 /**
@@ -9324,7 +11342,7 @@ XHR.prototype.headers = function(req, headers){
 };
 
 }).call(this,require("buffer").Buffer)
-},{"../transport":57,"./polling":61,"buffer":136,"debug":64}],61:[function(require,module,exports){
+},{"../transport":59,"./polling":63,"buffer":99,"debug":66}],63:[function(require,module,exports){
 (function (Buffer){
 
 /**
@@ -9609,7 +11627,7 @@ Polling.prototype.doClose = function (fn) {
 };
 
 }).call(this,require("buffer").Buffer)
-},{"../transport":57,"buffer":136,"debug":64,"engine.io-parser":67}],62:[function(require,module,exports){
+},{"../transport":59,"buffer":99,"debug":66,"engine.io-parser":69}],64:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -9721,7 +11739,7 @@ WebSocket.prototype.doClose = function (fn) {
   fn && fn();
 };
 
-},{"../transport":57,"debug":64,"engine.io-parser":67}],63:[function(require,module,exports){
+},{"../transport":59,"debug":66,"engine.io-parser":69}],65:[function(require,module,exports){
 (function (Buffer){
 /*!
  * base64id v0.1.0
@@ -9828,7 +11846,7 @@ Base64Id.prototype.generateId = function () {
 exports = module.exports = new Base64Id();
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":136,"crypto":143}],64:[function(require,module,exports){
+},{"buffer":99,"crypto":106}],66:[function(require,module,exports){
 
 /**
  * This is the web browser implementation of `debug()`.
@@ -9974,7 +11992,7 @@ function load() {
 
 exports.enable(load());
 
-},{"./debug":65}],65:[function(require,module,exports){
+},{"./debug":67}],67:[function(require,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -10173,25 +12191,25 @@ function coerce(val) {
   return val;
 }
 
-},{"ms":66}],66:[function(require,module,exports){
-module.exports=require(23)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\debug\\node_modules\\ms\\index.js":23}],67:[function(require,module,exports){
+},{"ms":68}],68:[function(require,module,exports){
 module.exports=require(24)
-},{"./keys":68,"after":69,"arraybuffer.slice":70,"base64-arraybuffer":71,"blob":72,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\lib\\browser.js":24,"utf8":73}],68:[function(require,module,exports){
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\debug\\node_modules\\ms\\index.js":24}],69:[function(require,module,exports){
 module.exports=require(25)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\lib\\keys.js":25}],69:[function(require,module,exports){
+},{"./keys":70,"after":71,"arraybuffer.slice":72,"base64-arraybuffer":73,"blob":74,"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\lib\\browser.js":25,"utf8":75}],70:[function(require,module,exports){
 module.exports=require(26)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\after\\index.js":26}],70:[function(require,module,exports){
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\lib\\keys.js":26}],71:[function(require,module,exports){
 module.exports=require(27)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\arraybuffer.slice\\index.js":27}],71:[function(require,module,exports){
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\after\\index.js":27}],72:[function(require,module,exports){
 module.exports=require(28)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\base64-arraybuffer\\lib\\base64-arraybuffer.js":28}],72:[function(require,module,exports){
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\arraybuffer.slice\\index.js":28}],73:[function(require,module,exports){
 module.exports=require(29)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\blob\\index.js":29}],73:[function(require,module,exports){
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\base64-arraybuffer\\lib\\base64-arraybuffer.js":29}],74:[function(require,module,exports){
 module.exports=require(30)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\utf8\\utf8.js":30}],74:[function(require,module,exports){
-module.exports=require(36)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\ws\\lib\\browser.js":36}],75:[function(require,module,exports){
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\blob\\index.js":30}],75:[function(require,module,exports){
+module.exports=require(31)
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\utf8\\utf8.js":31}],76:[function(require,module,exports){
+module.exports=require(37)
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\ws\\lib\\browser.js":37}],77:[function(require,module,exports){
 (function (global,Buffer){
 /*
  * Module requirements.
@@ -10252,9 +12270,9 @@ function hasBinary(data) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"buffer":136,"isarray":76}],76:[function(require,module,exports){
-module.exports=require(38)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\has-binary\\node_modules\\isarray\\index.js":38}],77:[function(require,module,exports){
+},{"buffer":99,"isarray":78}],78:[function(require,module,exports){
+module.exports=require(39)
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\has-binary\\node_modules\\isarray\\index.js":39}],79:[function(require,module,exports){
 (function (process){
 
 /**
@@ -10402,7 +12420,7 @@ Adapter.prototype.broadcast = function(packet, opts){
 };
 
 }).call(this,require('_process'))
-},{"_process":225,"events":218,"object-keys":78,"socket.io-parser":123}],78:[function(require,module,exports){
+},{"_process":188,"events":181,"object-keys":80,"socket.io-parser":83}],80:[function(require,module,exports){
 "use strict";
 
 // modified from https://github.com/es-shims/es5-shim
@@ -10474,7 +12492,7 @@ keysShim.shim = function shimObjectKeys() {
 module.exports = keysShim;
 
 
-},{"./isArguments":79}],79:[function(require,module,exports){
+},{"./isArguments":81}],81:[function(require,module,exports){
 "use strict";
 
 var toString = Object.prototype.toString;
@@ -10494,176 +12512,19 @@ module.exports = function isArguments(value) {
 };
 
 
-},{}],80:[function(require,module,exports){
-module.exports=require(1)
-},{"./lib/":81,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\index.js":1}],81:[function(require,module,exports){
-module.exports=require(2)
-},{"./manager":82,"./socket":84,"./url":85,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\lib\\index.js":2,"debug":53,"socket.io-parser":123}],82:[function(require,module,exports){
-module.exports=require(3)
-},{"./on":83,"./socket":84,"./url":85,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\lib\\manager.js":3,"component-bind":86,"component-emitter":87,"debug":53,"engine.io-client":88,"indexof":117,"object-component":118,"socket.io-parser":123}],83:[function(require,module,exports){
-module.exports=require(4)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\lib\\on.js":4}],84:[function(require,module,exports){
-module.exports=require(5)
-},{"./on":83,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\lib\\socket.js":5,"component-bind":86,"component-emitter":87,"debug":53,"has-binary":115,"socket.io-parser":123,"to-array":120}],85:[function(require,module,exports){
-module.exports=require(6)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\lib\\url.js":6,"debug":53,"parseuri":119}],86:[function(require,module,exports){
-module.exports=require(7)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\component-bind\\index.js":7}],87:[function(require,module,exports){
-module.exports=require(8)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\component-emitter\\index.js":8}],88:[function(require,module,exports){
-module.exports=require(10)
-},{"./lib/":89,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\index.js":10}],89:[function(require,module,exports){
-module.exports=require(11)
-},{"./socket":90,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\lib\\index.js":11,"engine.io-parser":102}],90:[function(require,module,exports){
-module.exports=require(12)
-},{"./transport":91,"./transports":92,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\lib\\socket.js":12,"component-emitter":87,"debug":99,"engine.io-parser":102,"indexof":117,"parsejson":111,"parseqs":112,"parseuri":113}],91:[function(require,module,exports){
-module.exports=require(13)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\lib\\transport.js":13,"component-emitter":87,"engine.io-parser":102}],92:[function(require,module,exports){
-module.exports=require(14)
-},{"./polling-jsonp":93,"./polling-xhr":94,"./websocket":96,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\lib\\transports\\index.js":14,"xmlhttprequest":97}],93:[function(require,module,exports){
-module.exports=require(15)
-},{"./polling":95,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\lib\\transports\\polling-jsonp.js":15,"component-inherit":98}],94:[function(require,module,exports){
-module.exports=require(16)
-},{"./polling":95,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\lib\\transports\\polling-xhr.js":16,"component-emitter":87,"component-inherit":98,"debug":99,"xmlhttprequest":97}],95:[function(require,module,exports){
-module.exports=require(17)
-},{"../transport":91,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\lib\\transports\\polling.js":17,"component-inherit":98,"debug":99,"engine.io-parser":102,"parseqs":112,"xmlhttprequest":97}],96:[function(require,module,exports){
-module.exports=require(18)
-},{"../transport":91,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\lib\\transports\\websocket.js":18,"component-inherit":98,"debug":99,"engine.io-parser":102,"parseqs":112,"ws":114}],97:[function(require,module,exports){
-module.exports=require(19)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\lib\\xmlhttprequest.js":19,"has-cors":109}],98:[function(require,module,exports){
-module.exports=require(20)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\component-inherit\\index.js":20}],99:[function(require,module,exports){
-module.exports=require(21)
-},{"./debug":100,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\debug\\browser.js":21}],100:[function(require,module,exports){
-module.exports=require(22)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\debug\\debug.js":22,"ms":101}],101:[function(require,module,exports){
-module.exports=require(23)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\debug\\node_modules\\ms\\index.js":23}],102:[function(require,module,exports){
-module.exports=require(24)
-},{"./keys":103,"after":104,"arraybuffer.slice":105,"base64-arraybuffer":106,"blob":107,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\lib\\browser.js":24,"utf8":108}],103:[function(require,module,exports){
-module.exports=require(25)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\lib\\keys.js":25}],104:[function(require,module,exports){
-module.exports=require(26)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\after\\index.js":26}],105:[function(require,module,exports){
-module.exports=require(27)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\arraybuffer.slice\\index.js":27}],106:[function(require,module,exports){
-module.exports=require(28)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\base64-arraybuffer\\lib\\base64-arraybuffer.js":28}],107:[function(require,module,exports){
-module.exports=require(29)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\blob\\index.js":29}],108:[function(require,module,exports){
-module.exports=require(30)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\engine.io-parser\\node_modules\\utf8\\utf8.js":30}],109:[function(require,module,exports){
-module.exports=require(31)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\has-cors\\index.js":31,"global":110}],110:[function(require,module,exports){
-module.exports=require(32)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\has-cors\\node_modules\\global\\index.js":32}],111:[function(require,module,exports){
-module.exports=require(33)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\parsejson\\index.js":33}],112:[function(require,module,exports){
-module.exports=require(34)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\parseqs\\index.js":34}],113:[function(require,module,exports){
-module.exports=require(35)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\parseuri\\index.js":35}],114:[function(require,module,exports){
-module.exports=require(36)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\engine.io-client\\node_modules\\ws\\lib\\browser.js":36}],115:[function(require,module,exports){
-module.exports=require(37)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\has-binary\\index.js":37,"isarray":116}],116:[function(require,module,exports){
-module.exports=require(38)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\has-binary\\node_modules\\isarray\\index.js":38}],117:[function(require,module,exports){
-module.exports=require(39)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\indexof\\index.js":39}],118:[function(require,module,exports){
-module.exports=require(40)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\object-component\\index.js":40}],119:[function(require,module,exports){
-module.exports=require(41)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\parseuri\\index.js":41}],120:[function(require,module,exports){
-module.exports=require(47)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\to-array\\index.js":47}],121:[function(require,module,exports){
-module.exports={
-  "name": "socket.io-client",
-  "version": "1.2.1",
-  "keywords": [
-    "realtime",
-    "framework",
-    "websocket",
-    "tcp",
-    "events",
-    "client"
-  ],
-  "dependencies": {
-    "debug": "0.7.4",
-    "engine.io-client": "1.4.3",
-    "component-bind": "1.0.0",
-    "component-emitter": "1.1.2",
-    "object-component": "0.0.3",
-    "socket.io-parser": "2.2.2",
-    "has-binary": "0.1.5",
-    "indexof": "0.0.1",
-    "parseuri": "0.0.2",
-    "to-array": "0.1.3"
-  },
-  "devDependencies": {
-    "socket.io": "1.2.1",
-    "mocha": "1.16.2",
-    "zuul": "1.10.2",
-    "istanbul": "0.2.1",
-    "expect.js": "0.2.0",
-    "uglify-js": "2.4.15",
-    "browserify": "4.2.1",
-    "base64-arraybuffer": "0.1.0",
-    "text-blob-builder": "0.0.1",
-    "has-cors": "1.0.3"
-  },
-  "scripts": {
-    "test": "make test"
-  },
-  "contributors": [
-    {
-      "name": "Guillermo Rauch",
-      "email": "rauchg@gmail.com"
-    },
-    {
-      "name": "Arnout Kazemier",
-      "email": "info@3rd-eden.com"
-    },
-    {
-      "name": "Vladimir Dronnikov",
-      "email": "dronnikov@gmail.com"
-    },
-    {
-      "name": "Einar Otto Stangvik",
-      "email": "einaros@gmail.com"
-    }
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Automattic/socket.io-client.git"
-  },
-  "license": "MIT",
-  "readme": "\n# socket.io-client\n\n[![Build Status](https://secure.travis-ci.org/Automattic/socket.io-client.svg)](http://travis-ci.org/Automattic/socket.io-client)\n[![NPM version](https://badge.fury.io/js/socket.io-client.svg)](http://badge.fury.io/js/socket.io-client)\n![Downloads](http://img.shields.io/npm/dm/socket.io-client.svg)\n\n## How to use\n\nA standalone build of `socket.io-client` is exposed automatically by the\nsocket.io server as `/socket.io/socket.io.js`. Alternatively you can\nserve the file `socket.io.js` found at the root of this repository.\n\n```html\n<script src=\"/socket.io/socket.io.js\"></script>\n<script>\n  var socket = io('http://localhost');\n  socket.on('connect', function(){});\n  socket.on('event', function(data){});\n  socket.on('disconnect', function(){});\n</script>\n```\n\nSocket.IO is compatible with [browserify](http://browserify.org/).\n\n### Node.JS (server-side usage)\n\n  Add `socket.io-client` to your `package.json` and then:\n\n  ```js\n  var socket = require('socket.io-client')('http://localhost');\n  socket.on('connect', function(){});\n  socket.on('event', function(data){});\n  socket.on('disconnect', function(){});\n  ```\n\n## API\n\n### IO(url:String, opts:Object):Socket\n\n  Exposed as the `io` namespace in the standalone build, or the result\n  of calling `require('socket.io-client')`.\n\n  When called, it creates a new `Manager` for the given URL, and attempts\n  to reuse an existing `Manager` for subsequent calls, unless the\n  `multiplex` option is passed with `false`.\n\n  The rest of the options are passed to the `Manager` constructor (see below\n  for details).\n\n  A `Socket` instance is returned for the namespace specified by the\n  pathname in the URL, defaulting to `/`. For example, if the `url` is\n  `http://localhost/users`, a transport connection will be established to\n  `http://localhost` and a Socket.IO connection will be established to\n  `/users`.\n\n### IO#protocol\n\n  Socket.io protocol revision number this client works with.\n\n### IO#Socket\n\n  Reference to the `Socket` constructor.\n\n### IO#Manager\n\n  Reference to the `Manager` constructor.\n\n### IO#Emitter\n\n  Reference to the `Emitter` constructor.\n\n### Manager(url:String, opts:Object)\n\n  A `Manager` represents a connection to a given Socket.IO server. One or\n  more `Socket` instances are associated with the manager. The manager\n  can be accessed through the `io` property of each `Socket` instance.\n\n  The `opts` are also passed to `engine.io` upon initialization of the\n  underlying `Socket`.\n\n  Options:\n  - `reconnection` whether to reconnect automatically (`true`)\n  - `reconnectionDelay` how long to wait before attempting a new\n    reconnection (`1000`)\n  - `reconnectionDelayMax` maximum amount of time to wait between\n    reconnections (`5000`). Each attempt increases the reconnection by\n    the amount specified by `reconnectionDelay`.\n  - `timeout` connection timeout before a `connect_error`\n    and `connect_timeout` events are emitted (`20000`)\n  - `autoConnect` by setting this false, you have to call `manager.open`\n    whenever you decide it's appropriate\n\n#### Events\n\n  - `connect`. Fired upon a successful connection.\n  - `connect_error`. Fired upon a connection error.\n    Parameters:\n      - `Object` error object\n  - `connect_timeout`. Fired upon a connection timeout.\n  - `reconnect`. Fired upon a successful reconnection.\n    Parameters:\n      - `Number` reconnection attempt number\n  - `reconnect_attempt`. Fired upon an attempt to reconnect.\n  - `reconnecting`. Fired upon an attempt to reconnect.\n    Parameters:\n      - `Number` reconnection attempt number\n  - `reconnect_error`. Fired upon a reconnection attempt error.\n    Parameters:\n      - `Object` error object\n  - `reconnect_failed`. Fired when couldn't reconnect within `reconnectionAttempts`\n\nThe events above are also emitted on the individual sockets that\nreconnect that depend on this `Manager`.\n\n### Manager#reconnection(v:Boolean):Manager\n\n  Sets the `reconnection` option, or returns it if no parameters\n  are passed.\n\n### Manager#reconnectionAttempts(v:Boolean):Manager\n\n  Sets the `reconnectionAttempts` option, or returns it if no parameters\n  are passed.\n\n### Manager#reconnectionDelay(v:Boolean):Manager\n\n  Sets the `reconectionDelay` option, or returns it if no parameters\n  are passed.\n\n### Manager#reconnectionDelayMax(v:Boolean):Manager\n\n  Sets the `reconectionDelayMax` option, or returns it if no parameters\n  are passed.\n\n### Manager#timeout(v:Boolean):Manager\n\n  Sets the `timeout` option, or returns it if no parameters\n  are passed.\n\n### Socket\n\n#### Events\n\n  - `connect`. Fired upon a connection including a successful reconnection.\n  - `error`. Fired upon a connection error\n    Parameters:\n      - `Object` error data\n  - `disconnect`. Fired upon a disconnection.\n  - `reconnect`. Fired upon a successful reconnection.\n    Parameters:\n      - `Number` reconnection attempt number\n  - `reconnect_attempt`. Fired upon an attempt to reconnect.\n  - `reconnecting`. Fired upon an attempt to reconnect.\n    Parameters:\n      - `Number` reconnection attempt number\n  - `reconnect_error`. Fired upon a reconnection attempt error.\n    Parameters:\n      - `Object` error object\n  - `reconnect_failed`. Fired when couldn't reconnect within `reconnectionAttempts`\n\n## License\n\n[MIT](/LICENSE)\n",
-  "readmeFilename": "README.md",
-  "description": "[![Build Status](https://secure.travis-ci.org/Automattic/socket.io-client.svg)](http://travis-ci.org/Automattic/socket.io-client) [![NPM version](https://badge.fury.io/js/socket.io-client.svg)](http://badge.fury.io/js/socket.io-client) ![Downloads](http://img.shields.io/npm/dm/socket.io-client.svg)",
-  "bugs": {
-    "url": "https://github.com/Automattic/socket.io-client/issues"
-  },
-  "homepage": "https://github.com/Automattic/socket.io-client",
-  "_id": "socket.io-client@1.2.1",
-  "_shasum": "bf640d4da6646083f7168b0fc168e8f349a26c6f",
-  "_from": "socket.io-client@1.2.1",
-  "_resolved": "https://registry.npmjs.org/socket.io-client/-/socket.io-client-1.2.1.tgz"
-}
-
-},{}],122:[function(require,module,exports){
-module.exports=require(42)
-},{"./is-buffer":124,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\socket.io-parser\\binary.js":42,"isarray":126}],123:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 module.exports=require(43)
-},{"./binary":122,"./is-buffer":124,"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\socket.io-parser\\index.js":43,"component-emitter":125,"debug":53,"isarray":126,"json3":127}],124:[function(require,module,exports){
+},{"./is-buffer":84,"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\socket.io-parser\\binary.js":43,"isarray":86}],83:[function(require,module,exports){
 module.exports=require(44)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\socket.io-parser\\is-buffer.js":44}],125:[function(require,module,exports){
-module.exports=require(8)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\component-emitter\\index.js":8}],126:[function(require,module,exports){
-module.exports=require(38)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\has-binary\\node_modules\\isarray\\index.js":38}],127:[function(require,module,exports){
-module.exports=require(46)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\socket.io-parser\\node_modules\\json3\\lib\\json3.js":46}],128:[function(require,module,exports){
+},{"./binary":82,"./is-buffer":84,"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\socket.io-parser\\index.js":44,"component-emitter":85,"debug":55,"isarray":86,"json3":87}],84:[function(require,module,exports){
+module.exports=require(45)
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\socket.io-parser\\is-buffer.js":45}],85:[function(require,module,exports){
+module.exports=require(9)
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\component-emitter\\index.js":9}],86:[function(require,module,exports){
+module.exports=require(39)
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\has-binary\\node_modules\\isarray\\index.js":39}],87:[function(require,module,exports){
+module.exports=require(47)
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\socket.io-parser\\node_modules\\json3\\lib\\json3.js":47}],88:[function(require,module,exports){
 //     Underscore.js 1.7.0
 //     http://underscorejs.org
 //     (c) 2009-2014 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -12080,7 +13941,7 @@ module.exports=require(46)
   }
 }.call(this));
 
-},{}],129:[function(require,module,exports){
+},{}],89:[function(require,module,exports){
 var _ = require('underscore');
 
 	var Clients = function() {
@@ -12177,10 +14038,10 @@ var _ = require('underscore');
 	module.exports = Clients;
 	
 
-},{"underscore":128}],130:[function(require,module,exports){
+},{"underscore":88}],90:[function(require,module,exports){
 
 var _ = require('underscore'),
-Clients = require('./Clients');
+Clients = require('./Clients.js');
 	
 module.exports = function(socketManager) {
 
@@ -12197,70 +14058,44 @@ var CommunicationManager = function(gameInputManager, gameOutputManager){
 	var that= this;
 	this.clients = new Clients();	
 
-	gameOutputManager.sendToClient = function(id, msg){
+	gameOutputManager.send = function(id, msg){
 		var client = that.clients.getClientByAid(id);
 		that.send(client.aid, 'message', msg);
 	};
-	gameOutputManager.sendToClients = function(msg){
-		_.each(that.clients.getClients(), function(clientAid) {
-			that.send(clientAid, 'message', msg || 'clientAid '+clientAid);
-		});		
-	};	
-
-	gameOutputManager.sendToClientLobbyState = function(aid){
-		var client = that.clients.getClientByAid(aid);
-		that.send(client.aid, 'message', that.clients.toString());
-	};
-
-	gameOutputManager.sendToTable = function(msg){
-		var table = that.clients.getTable();
-		if(table){
-			that.send(table.aid, 'message', msg);			
-		}else{
-			console.log('no table found');
-		}
-	};
-
 //----------------------------------------
 	this.onReconnection(function(aid){
-		console.log('onReconnection', aid);		
 		that.clients.reConnect(aid);
 		var client = that.clients.getClientByAid(aid);
 		if(client.isAuthorized){
 			gameInputManager.onPlayerReconnected(client.aid);
-		}		
-		that.clients.toString();
+		}
 	});
 	this.onConnection(function(aid){
-		console.log('onConnection', aid);
-		that.clients.addClient(aid);
-		gameOutputManager.sendToClientLobbyState(aid);
-		console.log('adding clietns');		
-		that.clients.toString();
+		that.clients.addClient(aid); 
 	});
 //----------------------------------------
 	this.onAuthorize(function(aid, msg){
-		console.log(aid, 'onAuthorize', msg);
 		var client = that.clients.getClientByAid(msg.aid);
 		if(!client){
 			return;
 		}
 		if(!client.isAuthorized){
-			that.clients.authorizePlayer(aid, msg.name);			
+			that.clients.authorizePlayer(aid, msg.name);
+			gameInputManager.onPlayerConnected(client.aid);				
 		}
-		gameInputManager.onPlayerConnected(client.aid);	
+		
 		//that.clients.deleteUnauthorizedByAid(aid);		
 		that.clients.toString();
 	});
 //----------------------------------------
 	this.onDisconnection(function(aid){
 		that.clients.removeClient(aid);	
-		that.clients.toString();	
+		that.clients.toString();
 	});
 
-	this.onMessage(function(aid, msg){
-			var client = that.clients.getClientBySocketId(socketId); 
-			gameInputManager.onThrowCard(client.aid, {cardId: 666});
+	this.onMessage(function(aid, msg){ 
+			var client = that.clients.getClientByAid(aid); 
+			gameInputManager.onMessage(client.aid, msg);
 	});
 };
 
@@ -12271,48 +14106,251 @@ return CommunicationManager;
 	
 };
 
-},{"./Clients":129,"underscore":128}],131:[function(require,module,exports){
+},{"./Clients.js":89,"underscore":88}],91:[function(require,module,exports){
+var RPCManager = require('./RPCManager.js');
 
-var SocketManager = require('./socketManager.js');
+function makeid(){
+    var text = "";
+    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for( var i=0; i < 5; i++ ){
+          text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+    return text;
+}
+
+var CommunicationManager = function(socket){
+  var that = this;
+  this.aid = sessionStorage['aid'] || null;
+  //syn
+  
+  socket.on('ACK', function () {
+    if(that.aid){
+      //reauthorize    
+      that.authorize();
+    }else{
+      //authorie
+      that.aid= sessionStorage['aid']= makeid();
+    }
+    socket.emit('CONNECT', {aid: that.aid});
+  });
+  this.onMessage = function(fn) {
+    socket.on('message', fn);
+  };
+  
+
+  this.authorize = function(playerName){
+    if(this.aid){ 
+      socket.emit('AUTHORIZE', {aid: that.aid, name: (playerName || null)});
+    }
+  };
+  this.send = function(msg){
+    socket.emit('message', msg);
+  };
+};
 
 
 var EndpointManager = function(url){
-	this.io = require('socket.io-client')(url);
+  var socket = require('socket.io-client')(url);
+  var cm = new CommunicationManager(socket);
+
+  this.authorize = function(username) {
+    cm.authorize(username);
+  };
+
+  this.send = function(msg) {
+    cm.send(msg);
+  };
+
+  this.onMessage = function(callback) {
+   cm.onMessage(callback);
+  };
+
 };
 
+
+
+
+var rpcManager = new RPCManager();
+
+var klient = {
+  // output ============================
+  throwCard: function(cid){},
+  
+  //input ===========================
+  onCardToClient: function(cid){
+    //console.log(this);
+    this.throwCard('throwCard').then(function(result){
+      console.log(result);
+    });
+  },  
+  
+};
+
+rpcManager.prepare(klient);
+
+
+
+
+
+
+module.exports = EndpointManager;
+},{"./RPCManager.js":93,"socket.io-client":2}],92:[function(require,module,exports){
+var SocketManager = require('./socketManager.js');
+var RPCManager = require('./RPCManager.js');
+
+
 var ProxyManager = function(server) {
-	console.log('ProxyManager called');
 	var socketManager = new SocketManager(server);
 	var CommunicationManager = require('./CommunicationManager.js')(socketManager);
 
-
-//-----------------------------------------------------
-
 var gameOutputManager = {
-	sendToClient: function(id, msg){}
+	send: function(aid, msg){}
 };
 
-var gameInputManager = {
-	
+var gameInputManager = {	
 	onPlayerReconnected: function(aid){
-		console.log('!!!!!!!!!!onPlayerREconnected ', aid);
-		gameOutputManager.sendToClientLobbyState(aid);
+		console.log('!!!!!!!!!! onPlayerREconnected ', aid);		
 	},	
 	onPlayerConnected: function(aid){
-		console.log('!!!!!!!!!!onPlayerConnected ', aid);
-		gameOutputManager.sendToClientLobbyState(aid);
+		console.log('!!!!!!!!!! onPlayerConnected ', aid);
 	},
-	onTableConnected: function(){
-		console.log('onTableConnected');
-	},
-	onThrowCard: function(id, msg){
-		gameOutputManager.sendToClient(id, msg);
-	}
+	onMessage: function(aid, msg) {
+		console.log('!!!!!!!!!! onMessage ', aid, msg);
+		gameOutputManager.send(aid, {response: 'yarly'})
+	}	
 };
 
 (new CommunicationManager(gameInputManager, gameOutputManager));
 
+
+
+
+var rpcManager = new RPCManager();
+
+
+
+var server = {
+  // output ============================
+  cardToClient: function(cid){},
+  
+  //input ===========================
+  onThrowCard: function(cid){
+    //console.log(this);
+    this.cardToClient('xd').then(function(result){
+      console.log(result);
+    });
+  },  
+  
 };
+
+rpcManager.prepare(server);
+
+
+console.log(rpcManager.inputTypeCallbacks);
+console.log('-----')
+console.log(rpcManager.outputTypeCallbacks);
+
+rpcManager.prepareOutputResponses();
+
+
+};
+
+module.exports = ProxyManager;
+},{"./CommunicationManager.js":90,"./RPCManager.js":93,"./socketManager.js":95}],93:[function(require,module,exports){
+var _ = require('underscore');
+var q = require('q');
+
+var getParamsByFn = function(target){
+    var FN_ARGS = /^function\s*[^\(]*\(\s*([^\)]*)\)/m;
+    var text = target.toString();
+    var args = text.match(FN_ARGS)[1].split(',');
+    return args;
+};
+
+var getOutputTypeCallbacks= function(callbacks){
+  return _.filter(callbacks, function(cb){
+    return !cb.isOutputFn;
+  });  
+};
+var getInputTypeCallbacks= function(callbacks){
+  return _.filter(callbacks, function(cb){
+    return cb.isOutputFn;
+  });    
+};
+
+//============================================
+var RPCManager = function(){
+  
+};
+
+
+
+RPCManager.prototype.prepare = function(callbacks){
+var callbacksInfo = [];
+
+_.each(callbacks, function(fn, name){
+  callbacksInfo.push({
+    name: name,
+    normalizedName: name.toLowerCase(),
+    isOutputFn: !!(name.toLowerCase().substr(0,2) === "on"),
+    args: getParamsByFn(fn.toString())
+  });
+});
+
+
+this.inputTypeCallbacks = getInputTypeCallbacks(callbacksInfo);
+this.outputTypeCallbacks = getOutputTypeCallbacks(callbacksInfo);
+
+};
+
+RPCManager.prototype.prepareOutputResponses = function(){
+var thisX = {
+  id: 1
+};
+_.each(this.outputTypeCallbacks, function(callback){
+  thisX[callback.name]= function(){
+    var deferred = q.defer();
+    console.log(callback.name+' called');
+    setTimeout(function(){
+      deferred.resolve({ans:'wer'});
+    }, 200);
+    return deferred.promise;
+  };
+});
+
+};
+
+
+module.exports = RPCManager;
+
+
+
+
+
+
+
+
+
+
+//u usera:
+// var thisX = {
+//   id: 1
+// };
+// _.each(outputTypeCallbacks, function(callback){  
+//   thisX[callback.name]= function(){
+//     var deferred = Q.defer();
+//     console.log(callback.name+' called');
+//     setTimeout(function(){
+//       deferred.resolve({ans:'wer'});
+//     }, 200);
+//     return deferred.promise;
+//   };
+// });
+
+// server.onThrowCard.call(thisX, 'aaa');
+},{"q":1,"underscore":88}],94:[function(require,module,exports){
+var ProxyManager = require('./ProxyManager.js');
+var EndpointManager = require('./EndpointManager.js');
 
 
 
@@ -12326,7 +14364,12 @@ if(typeof window !== 'undefined'){
 window.RPC = publicAPI;
 }
 module.exports = publicAPI;
-},{"./CommunicationManager.js":130,"./socketManager.js":132,"socket.io-client":1}],132:[function(require,module,exports){
+
+
+
+
+
+},{"./EndpointManager.js":91,"./ProxyManager.js":92}],95:[function(require,module,exports){
 var
 _ = require('underscore');
 
@@ -12367,6 +14410,7 @@ var SocketManager = function(server){
 			});
 
 			socket.on('AUTHORIZE', function(msg){
+				console.log(msg, 'AUTHORIZE')
 				that.onAuthorizeCallback.apply(that, [authorizeId, msg]);
 			});
 
@@ -12375,7 +14419,7 @@ var SocketManager = function(server){
 				var client= that.getClientByAid(authorizeId);
 				client.isConnected = false;
 			});
-		});//authorize
+		});//CONNEST
 	});
 };
 SocketManager.prototype.onAuthorizeCallback = function(){ console.log('onAuthorizeCallback'); };
@@ -12385,7 +14429,6 @@ SocketManager.prototype.onReconnectionCallaback = function(){ console.log('onRec
 SocketManager.prototype.onDisconnectionCallaback = function(){ console.log('onDisconnectionCallaback'); };
 
 SocketManager.prototype.send= function(aid, msg, obj){
-	console.log('try to send to '+aid)
 		var client = this.getClientByAid(aid);
 		if(!client){
 			console.log('socket does not exists ;x');			
@@ -12414,9 +14457,9 @@ SocketManager.prototype.onDisconnection = function(fn){
 };
 
 module.exports = SocketManager;
-},{"socket.io":48,"underscore":128}],133:[function(require,module,exports){
+},{"socket.io":50,"underscore":88}],96:[function(require,module,exports){
 
-},{}],134:[function(require,module,exports){
+},{}],97:[function(require,module,exports){
 // http://wiki.commonjs.org/wiki/Unit_Testing/1.0
 //
 // THIS IS NOT TESTED NOR LIKELY TO WORK OUTSIDE V8!
@@ -12778,9 +14821,9 @@ var objectKeys = Object.keys || function (obj) {
   return keys;
 };
 
-},{"util/":245}],135:[function(require,module,exports){
-module.exports=require(133)
-},{"c:\\Users\\compaq\\AppData\\Roaming\\npm\\node_modules\\browserify\\lib\\_empty.js":133}],136:[function(require,module,exports){
+},{"util/":208}],98:[function(require,module,exports){
+module.exports=require(96)
+},{"c:\\Users\\adasq\\AppData\\Roaming\\npm\\node_modules\\browserify\\lib\\_empty.js":96}],99:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -13833,7 +15876,7 @@ function decodeUtf8Char (str) {
   }
 }
 
-},{"base64-js":137,"ieee754":138,"is-array":139}],137:[function(require,module,exports){
+},{"base64-js":100,"ieee754":101,"is-array":102}],100:[function(require,module,exports){
 var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 ;(function (exports) {
@@ -13955,7 +15998,7 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
-},{}],138:[function(require,module,exports){
+},{}],101:[function(require,module,exports){
 exports.read = function(buffer, offset, isLE, mLen, nBytes) {
   var e, m,
       eLen = nBytes * 8 - mLen - 1,
@@ -14041,7 +16084,7 @@ exports.write = function(buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128;
 };
 
-},{}],139:[function(require,module,exports){
+},{}],102:[function(require,module,exports){
 
 /**
  * isArray
@@ -14076,7 +16119,7 @@ module.exports = isArray || function (val) {
   return !! val && '[object Array]' == str.call(val);
 };
 
-},{}],140:[function(require,module,exports){
+},{}],103:[function(require,module,exports){
 (function (Buffer){
 var createHash = require('sha.js')
 
@@ -14162,7 +16205,7 @@ Hash.prototype.digest = function (enc) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"./md5":144,"buffer":136,"ripemd160":210,"sha.js":212,"stream":241,"util":245}],141:[function(require,module,exports){
+},{"./md5":107,"buffer":99,"ripemd160":173,"sha.js":175,"stream":204,"util":208}],104:[function(require,module,exports){
 (function (Buffer){
 var createHash = require('./create-hash')
 var Transform = require('stream').Transform;
@@ -14231,7 +16274,7 @@ Hmac.prototype.digest = function (enc) {
 
 
 }).call(this,require("buffer").Buffer)
-},{"./create-hash":140,"buffer":136,"stream":241,"util":245}],142:[function(require,module,exports){
+},{"./create-hash":103,"buffer":99,"stream":204,"util":208}],105:[function(require,module,exports){
 (function (Buffer){
 var intSize = 4;
 var zeroBuffer = new Buffer(intSize); zeroBuffer.fill(0);
@@ -14269,7 +16312,7 @@ function hash(buf, fn, hashSize, bigEndian) {
 module.exports = { hash: hash };
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":136}],143:[function(require,module,exports){
+},{"buffer":99}],106:[function(require,module,exports){
 (function (Buffer){
 var rng = require('./rng')
 
@@ -14322,7 +16365,7 @@ each([
 })
 
 }).call(this,require("buffer").Buffer)
-},{"./create-hash":140,"./create-hmac":141,"./pbkdf2":216,"./rng":217,"browserify-aes/inject":150,"browserify-sign/inject":163,"buffer":136,"diffie-hellman/inject":204}],144:[function(require,module,exports){
+},{"./create-hash":103,"./create-hmac":104,"./pbkdf2":179,"./rng":180,"browserify-aes/inject":113,"browserify-sign/inject":126,"buffer":99,"diffie-hellman/inject":167}],107:[function(require,module,exports){
 /*
  * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
  * Digest Algorithm, as defined in RFC 1321.
@@ -14479,7 +16522,7 @@ module.exports = function md5(buf) {
   return helpers.hash(buf, core_md5, 16);
 };
 
-},{"./helpers":142}],145:[function(require,module,exports){
+},{"./helpers":105}],108:[function(require,module,exports){
 (function (Buffer){
 
 module.exports = function (crypto, password, keyLen, ivLen) {
@@ -14539,7 +16582,7 @@ module.exports = function (crypto, password, keyLen, ivLen) {
   };
 };
 }).call(this,require("buffer").Buffer)
-},{"buffer":136}],146:[function(require,module,exports){
+},{"buffer":99}],109:[function(require,module,exports){
 (function (Buffer){
 var uint_max = Math.pow(2, 32);
 function fixup_uint32(x) {
@@ -14738,7 +16781,7 @@ AES.prototype._doCryptBlock = function(M, keySchedule, SUB_MIX, SBOX) {
 
   exports.AES = AES;
 }).call(this,require("buffer").Buffer)
-},{"buffer":136}],147:[function(require,module,exports){
+},{"buffer":99}],110:[function(require,module,exports){
 (function (Buffer){
 var Transform = require('stream').Transform;
 var inherits = require('inherits');
@@ -14773,7 +16816,7 @@ CipherBase.prototype.final = function (outputEnc) {
   return outData;
 };
 }).call(this,require("buffer").Buffer)
-},{"buffer":136,"inherits":223,"stream":241}],148:[function(require,module,exports){
+},{"buffer":99,"inherits":186,"stream":204}],111:[function(require,module,exports){
 (function (Buffer){
 var aes = require('./aes');
 var Transform = require('./cipherBase');
@@ -14894,7 +16937,7 @@ module.exports = function (crypto) {
 };
 
 }).call(this,require("buffer").Buffer)
-},{"./EVP_BytesToKey":145,"./aes":146,"./cipherBase":147,"./modes":151,"./modes/cbc":152,"./modes/cfb":153,"./modes/ctr":154,"./modes/ecb":155,"./modes/ofb":156,"./streamCipher":157,"buffer":136,"inherits":223}],149:[function(require,module,exports){
+},{"./EVP_BytesToKey":108,"./aes":109,"./cipherBase":110,"./modes":114,"./modes/cbc":115,"./modes/cfb":116,"./modes/ctr":117,"./modes/ecb":118,"./modes/ofb":119,"./streamCipher":120,"buffer":99,"inherits":186}],112:[function(require,module,exports){
 (function (Buffer){
 var aes = require('./aes');
 var Transform = require('./cipherBase');
@@ -15006,7 +17049,7 @@ module.exports = function (crypto) {
 };
 
 }).call(this,require("buffer").Buffer)
-},{"./EVP_BytesToKey":145,"./aes":146,"./cipherBase":147,"./modes":151,"./modes/cbc":152,"./modes/cfb":153,"./modes/ctr":154,"./modes/ecb":155,"./modes/ofb":156,"./streamCipher":157,"buffer":136,"inherits":223}],150:[function(require,module,exports){
+},{"./EVP_BytesToKey":108,"./aes":109,"./cipherBase":110,"./modes":114,"./modes/cbc":115,"./modes/cfb":116,"./modes/ctr":117,"./modes/ecb":118,"./modes/ofb":119,"./streamCipher":120,"buffer":99,"inherits":186}],113:[function(require,module,exports){
 module.exports = function (crypto, exports) {
   exports = exports || {};
   var ciphers = require('./encrypter')(crypto);
@@ -15023,7 +17066,7 @@ module.exports = function (crypto, exports) {
 };
 
 
-},{"./decrypter":148,"./encrypter":149,"./modes":151}],151:[function(require,module,exports){
+},{"./decrypter":111,"./encrypter":112,"./modes":114}],114:[function(require,module,exports){
 exports['aes-128-ecb'] = {
   cipher: 'AES',
   key: 128,
@@ -15132,7 +17175,7 @@ exports['aes-256-ctr'] = {
   mode: 'CTR',
   type: 'stream'
 };
-},{}],152:[function(require,module,exports){
+},{}],115:[function(require,module,exports){
 var xor = require('../xor');
 exports.encrypt = function (self, block) {
   var data = xor(block, self._prev);
@@ -15145,7 +17188,7 @@ exports.decrypt = function (self, block) {
   var out = self._cipher.decryptBlock(block);
   return xor(out, pad);
 };
-},{"../xor":158}],153:[function(require,module,exports){
+},{"../xor":121}],116:[function(require,module,exports){
 (function (Buffer){
 var xor = require('../xor');
 exports.encrypt = function (self, data, decrypt) {
@@ -15175,7 +17218,7 @@ function encryptStart(self, data, decrypt) {
   return out;
 }
 }).call(this,require("buffer").Buffer)
-},{"../xor":158,"buffer":136}],154:[function(require,module,exports){
+},{"../xor":121,"buffer":99}],117:[function(require,module,exports){
 (function (Buffer){
 var xor = require('../xor');
 function getBlock(self) {
@@ -15206,14 +17249,14 @@ function incr32(iv) {
   }
 }
 }).call(this,require("buffer").Buffer)
-},{"../xor":158,"buffer":136}],155:[function(require,module,exports){
+},{"../xor":121,"buffer":99}],118:[function(require,module,exports){
 exports.encrypt = function (self, block) {
   return self._cipher.encryptBlock(block);
 };
 exports.decrypt = function (self, block) {
   return self._cipher.decryptBlock(block);
 };
-},{}],156:[function(require,module,exports){
+},{}],119:[function(require,module,exports){
 (function (Buffer){
 var xor = require('../xor');
 function getBlock(self) {
@@ -15229,7 +17272,7 @@ exports.encrypt = function (self, chunk) {
   return xor(chunk, pad);
 };
 }).call(this,require("buffer").Buffer)
-},{"../xor":158,"buffer":136}],157:[function(require,module,exports){
+},{"../xor":121,"buffer":99}],120:[function(require,module,exports){
 (function (Buffer){
 var aes = require('./aes');
 var Transform = require('./cipherBase');
@@ -15258,7 +17301,7 @@ StreamCipher.prototype._flush = function (next) {
   next();
 };
 }).call(this,require("buffer").Buffer)
-},{"./aes":146,"./cipherBase":147,"buffer":136,"inherits":223}],158:[function(require,module,exports){
+},{"./aes":109,"./cipherBase":110,"buffer":99,"inherits":186}],121:[function(require,module,exports){
 (function (Buffer){
 module.exports = xor;
 function xor(a, b) {
@@ -15271,7 +17314,7 @@ function xor(a, b) {
   return out;
 }
 }).call(this,require("buffer").Buffer)
-},{"buffer":136}],159:[function(require,module,exports){
+},{"buffer":99}],122:[function(require,module,exports){
 module.exports={"2.16.840.1.101.3.4.1.1": "aes-128-ecb",
 "2.16.840.1.101.3.4.1.2": "aes-128-cbc",
 "2.16.840.1.101.3.4.1.3": "aes-128-ofb",
@@ -15285,7 +17328,7 @@ module.exports={"2.16.840.1.101.3.4.1.1": "aes-128-ecb",
 "2.16.840.1.101.3.4.1.43": "aes-256-ofb",
 "2.16.840.1.101.3.4.1.44": "aes-256-cfb"
 }
-},{}],160:[function(require,module,exports){
+},{}],123:[function(require,module,exports){
 (function (Buffer){
 exports['RSA-SHA224'] = exports.sha224WithRSAEncryption = {
   sign: 'rsa',
@@ -15318,7 +17361,7 @@ exports['ecdsa-with-SHA1'] = {
 	id: new Buffer(/*'3021300906052b0e03021a05000414'*/'', 'hex')
 }
 }).call(this,require("buffer").Buffer)
-},{"buffer":136}],161:[function(require,module,exports){
+},{"buffer":99}],124:[function(require,module,exports){
 // from https://github.com/indutny/self-signed/blob/gh-pages/lib/asn1.js
 // Fedor, you are amazing.
 
@@ -15429,9 +17472,9 @@ var ECPrivateKey2 = asn1.define('ECPrivateKey2', function() {
   );
 });
 exports.ECPrivateKey2 = ECPrivateKey2;
-},{"asn1.js":165,"asn1.js-rfc3280":164}],162:[function(require,module,exports){
+},{"asn1.js":128,"asn1.js-rfc3280":127}],125:[function(require,module,exports){
 require('./inject')(module.exports, require('crypto'));
-},{"./inject":163,"crypto":143}],163:[function(require,module,exports){
+},{"./inject":126,"crypto":106}],126:[function(require,module,exports){
 (function (Buffer){
 var sign = require('./sign');
 var verify = require('./verify');
@@ -15508,7 +17551,7 @@ Verify.prototype.verify = function verifyMethod(key, sig, enc) {
 	return verify(sig, Buffer.concat([this._tag, hash]), key);
 };
 }).call(this,require("buffer").Buffer)
-},{"./algos":160,"./sign":200,"./verify":201,"buffer":136,"inherits":223,"readable-stream":238}],164:[function(require,module,exports){
+},{"./algos":123,"./sign":163,"./verify":164,"buffer":99,"inherits":186,"readable-stream":201}],127:[function(require,module,exports){
 try {
   var asn1 = require('asn1.js');
 } catch (e) {
@@ -15662,7 +17705,7 @@ var AttributeValue = asn1.define('AttributeValue', function() {
 });
 exports.AttributeValue = AttributeValue;
 
-},{"../..":162,"asn1.js":165}],165:[function(require,module,exports){
+},{"../..":125,"asn1.js":128}],128:[function(require,module,exports){
 var asn1 = exports;
 
 asn1.bignum = require('bn.js');
@@ -15673,7 +17716,7 @@ asn1.constants = require('./asn1/constants');
 asn1.decoders = require('./asn1/decoders');
 asn1.encoders = require('./asn1/encoders');
 
-},{"./asn1/api":166,"./asn1/base":168,"./asn1/constants":172,"./asn1/decoders":174,"./asn1/encoders":176,"bn.js":177}],166:[function(require,module,exports){
+},{"./asn1/api":129,"./asn1/base":131,"./asn1/constants":135,"./asn1/decoders":137,"./asn1/encoders":139,"bn.js":140}],129:[function(require,module,exports){
 var asn1 = require('../asn1');
 var util = require('util');
 var vm = require('vm');
@@ -15726,7 +17769,7 @@ Entity.prototype.encode = function encode(data, enc, /* internal */ reporter) {
   return this._getEncoder(enc).encode(data, reporter);
 };
 
-},{"../asn1":165,"util":245,"vm":246}],167:[function(require,module,exports){
+},{"../asn1":128,"util":208,"vm":209}],130:[function(require,module,exports){
 var assert = require('assert');
 var util = require('util');
 var Reporter = require('../base').Reporter;
@@ -15844,7 +17887,7 @@ EncoderBuffer.prototype.join = function join(out, offset) {
   return out;
 };
 
-},{"../base":168,"assert":134,"buffer":136,"util":245}],168:[function(require,module,exports){
+},{"../base":131,"assert":97,"buffer":99,"util":208}],131:[function(require,module,exports){
 var base = exports;
 
 base.Reporter = require('./reporter').Reporter;
@@ -15852,7 +17895,7 @@ base.DecoderBuffer = require('./buffer').DecoderBuffer;
 base.EncoderBuffer = require('./buffer').EncoderBuffer;
 base.Node = require('./node');
 
-},{"./buffer":167,"./node":169,"./reporter":170}],169:[function(require,module,exports){
+},{"./buffer":130,"./node":132,"./reporter":133}],132:[function(require,module,exports){
 var assert = require('assert');
 var Reporter = require('../base').Reporter;
 var EncoderBuffer = require('../base').EncoderBuffer;
@@ -16429,7 +18472,7 @@ Node.prototype._encodePrimitive = function encodePrimitive(tag, data) {
     throw new Error('Unsupported tag: ' + tag);
 };
 
-},{"../base":168,"assert":134}],170:[function(require,module,exports){
+},{"../base":131,"assert":97}],133:[function(require,module,exports){
 var util = require('util');
 
 function Reporter(options) {
@@ -16520,7 +18563,7 @@ ReporterError.prototype.rethrow = function rethrow(msg) {
   return this;
 };
 
-},{"util":245}],171:[function(require,module,exports){
+},{"util":208}],134:[function(require,module,exports){
 var constants = require('../constants');
 
 exports.tagClass = {
@@ -16564,7 +18607,7 @@ exports.tag = {
 };
 exports.tagByName = constants._reverse(exports.tag);
 
-},{"../constants":172}],172:[function(require,module,exports){
+},{"../constants":135}],135:[function(require,module,exports){
 var constants = exports;
 
 // Helper
@@ -16585,7 +18628,7 @@ constants._reverse = function reverse(map) {
 
 constants.der = require('./der');
 
-},{"./der":171}],173:[function(require,module,exports){
+},{"./der":134}],136:[function(require,module,exports){
 var util = require('util');
 
 var asn1 = require('../../asn1');
@@ -16887,12 +18930,12 @@ function derDecodeLen(buf, primitive, fail) {
   return len;
 }
 
-},{"../../asn1":165,"util":245}],174:[function(require,module,exports){
+},{"../../asn1":128,"util":208}],137:[function(require,module,exports){
 var decoders = exports;
 
 decoders.der = require('./der');
 
-},{"./der":173}],175:[function(require,module,exports){
+},{"./der":136}],138:[function(require,module,exports){
 var util = require('util');
 var Buffer = require('buffer').Buffer;
 
@@ -17164,12 +19207,12 @@ function encodeTag(tag, primitive, cls, reporter) {
   return res;
 }
 
-},{"../../asn1":165,"buffer":136,"util":245}],176:[function(require,module,exports){
+},{"../../asn1":128,"buffer":99,"util":208}],139:[function(require,module,exports){
 var encoders = exports;
 
 encoders.der = require('./der');
 
-},{"./der":175}],177:[function(require,module,exports){
+},{"./der":138}],140:[function(require,module,exports){
 // Utils
 
 function assert(val, msg) {
@@ -19070,7 +21113,7 @@ Mont.prototype.invm = function invm(a) {
   return res._forceRed(this);
 };
 
-},{}],178:[function(require,module,exports){
+},{}],141:[function(require,module,exports){
 var elliptic = exports;
 
 elliptic.version = require('../package.json').version;
@@ -19083,7 +21126,7 @@ elliptic.curves = require('./elliptic/curves');
 // Protocols
 elliptic.ec = require('./elliptic/ec');
 
-},{"../package.json":197,"./elliptic/curve":181,"./elliptic/curves":184,"./elliptic/ec":185,"./elliptic/hmac-drbg":188,"./elliptic/utils":189,"brorand":190}],179:[function(require,module,exports){
+},{"../package.json":160,"./elliptic/curve":144,"./elliptic/curves":147,"./elliptic/ec":148,"./elliptic/hmac-drbg":151,"./elliptic/utils":152,"brorand":153}],142:[function(require,module,exports){
 var assert = require('assert');
 var bn = require('bn.js');
 var elliptic = require('../../elliptic');
@@ -19387,7 +21430,7 @@ BasePoint.prototype.dblp = function dblp(k) {
   return r;
 };
 
-},{"../../elliptic":178,"assert":134,"bn.js":177}],180:[function(require,module,exports){
+},{"../../elliptic":141,"assert":97,"bn.js":140}],143:[function(require,module,exports){
 var assert = require('assert');
 var curve = require('../curve');
 var elliptic = require('../../elliptic');
@@ -19750,7 +21793,7 @@ Point.prototype.getY = function getY() {
 Point.prototype.toP = Point.prototype.normalize;
 Point.prototype.mixedAdd = Point.prototype.add;
 
-},{"../../elliptic":178,"../curve":181,"assert":134,"bn.js":177,"inherits":223}],181:[function(require,module,exports){
+},{"../../elliptic":141,"../curve":144,"assert":97,"bn.js":140,"inherits":186}],144:[function(require,module,exports){
 var curve = exports;
 
 curve.base = require('./base');
@@ -19758,7 +21801,7 @@ curve.short = require('./short');
 curve.mont = require('./mont');
 curve.edwards = require('./edwards');
 
-},{"./base":179,"./edwards":180,"./mont":182,"./short":183}],182:[function(require,module,exports){
+},{"./base":142,"./edwards":143,"./mont":145,"./short":146}],145:[function(require,module,exports){
 var assert = require('assert');
 var curve = require('../curve');
 var elliptic = require('../../elliptic');
@@ -19923,7 +21966,7 @@ Point.prototype.getX = function getX() {
   return this.x.fromRed();
 };
 
-},{"../../elliptic":178,"../curve":181,"assert":134,"bn.js":177,"inherits":223}],183:[function(require,module,exports){
+},{"../../elliptic":141,"../curve":144,"assert":97,"bn.js":140,"inherits":186}],146:[function(require,module,exports){
 var assert = require('assert');
 var curve = require('../curve');
 var elliptic = require('../../elliptic');
@@ -20821,7 +22864,7 @@ JPoint.prototype.isInfinity = function isInfinity() {
   return this.z.cmpn(0) === 0;
 };
 
-},{"../../elliptic":178,"../curve":181,"assert":134,"bn.js":177,"inherits":223}],184:[function(require,module,exports){
+},{"../../elliptic":141,"../curve":144,"assert":97,"bn.js":140,"inherits":186}],147:[function(require,module,exports){
 var curves = exports;
 
 var assert = require('assert');
@@ -21750,7 +23793,7 @@ defineCurve('secp256k1', {
   ]
 });
 
-},{"../elliptic":178,"assert":134,"bn.js":177,"hash.js":191}],185:[function(require,module,exports){
+},{"../elliptic":141,"assert":97,"bn.js":140,"hash.js":154}],148:[function(require,module,exports){
 var assert = require('assert');
 var bn = require('bn.js');
 var elliptic = require('../../elliptic');
@@ -21900,7 +23943,7 @@ EC.prototype.verify = function verify(msg, signature, key) {
   return p.getX().mod(this.n).cmp(r) === 0;
 };
 
-},{"../../elliptic":178,"./key":186,"./signature":187,"assert":134,"bn.js":177}],186:[function(require,module,exports){
+},{"../../elliptic":141,"./key":149,"./signature":150,"assert":97,"bn.js":140}],149:[function(require,module,exports){
 var assert = require('assert');
 var bn = require('bn.js');
 
@@ -22046,7 +24089,7 @@ KeyPair.prototype.inspect = function inspect() {
          ' pub: ' + (this.pub && this.pub.inspect()) + ' >';
 };
 
-},{"../../elliptic":178,"assert":134,"bn.js":177}],187:[function(require,module,exports){
+},{"../../elliptic":141,"assert":97,"bn.js":140}],150:[function(require,module,exports){
 var assert = require('assert');
 var bn = require('bn.js');
 
@@ -22111,7 +24154,7 @@ Signature.prototype.toDER = function toDER(enc) {
   return utils.encode(res, enc);
 };
 
-},{"../../elliptic":178,"assert":134,"bn.js":177}],188:[function(require,module,exports){
+},{"../../elliptic":141,"assert":97,"bn.js":140}],151:[function(require,module,exports){
 var assert = require('assert');
 
 var hash = require('hash.js');
@@ -22226,7 +24269,7 @@ HmacDRBG.prototype.generate = function generate(len, enc, add, addEnc) {
   return utils.encode(res, enc);
 };
 
-},{"../elliptic":178,"assert":134,"hash.js":191}],189:[function(require,module,exports){
+},{"../elliptic":141,"assert":97,"hash.js":154}],152:[function(require,module,exports){
 var assert = require('assert');
 var bn = require('bn.js');
 
@@ -22374,7 +24417,7 @@ function getJSF(k1, k2) {
 }
 utils.getJSF = getJSF;
 
-},{"assert":134,"bn.js":177}],190:[function(require,module,exports){
+},{"assert":97,"bn.js":140}],153:[function(require,module,exports){
 var r;
 
 module.exports = function rand(len) {
@@ -22433,7 +24476,7 @@ if (typeof window === 'object') {
   }
 }
 
-},{}],191:[function(require,module,exports){
+},{}],154:[function(require,module,exports){
 var hash = exports;
 
 hash.utils = require('./hash/utils');
@@ -22447,7 +24490,7 @@ hash.sha256 = hash.sha.sha256;
 hash.sha224 = hash.sha.sha224;
 hash.ripemd160 = hash.ripemd.ripemd160;
 
-},{"./hash/common":192,"./hash/hmac":193,"./hash/ripemd":194,"./hash/sha":195,"./hash/utils":196}],192:[function(require,module,exports){
+},{"./hash/common":155,"./hash/hmac":156,"./hash/ripemd":157,"./hash/sha":158,"./hash/utils":159}],155:[function(require,module,exports){
 var hash = require('../hash');
 var utils = hash.utils;
 var assert = utils.assert;
@@ -22530,7 +24573,7 @@ BlockHash.prototype._pad = function pad() {
   return res;
 }
 
-},{"../hash":191}],193:[function(require,module,exports){
+},{"../hash":154}],156:[function(require,module,exports){
 var hmac = exports;
 
 var hash = require('../hash');
@@ -22579,7 +24622,7 @@ Hmac.prototype.digest = function digest(enc) {
   return this.hash.outer.digest(enc);
 };
 
-},{"../hash":191}],194:[function(require,module,exports){
+},{"../hash":154}],157:[function(require,module,exports){
 var hash = require('../hash');
 var utils = hash.utils;
 
@@ -22724,7 +24767,7 @@ var sh = [
   8, 5, 12, 9, 12, 5, 14, 6, 8, 13, 6, 5, 15, 13, 11, 11
 ];
 
-},{"../hash":191}],195:[function(require,module,exports){
+},{"../hash":154}],158:[function(require,module,exports){
 var hash = require('../hash');
 var utils = hash.utils;
 var assert = utils.assert;
@@ -22865,7 +24908,7 @@ function g1_256(x) {
   return rotr32(x, 17) ^ rotr32(x, 19) ^ (x >>> 10);
 }
 
-},{"../hash":191}],196:[function(require,module,exports){
+},{"../hash":154}],159:[function(require,module,exports){
 var utils = exports;
 
 function toArray(msg, enc) {
@@ -23064,7 +25107,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],197:[function(require,module,exports){
+},{}],160:[function(require,module,exports){
 module.exports={
   "name": "elliptic",
   "version": "0.15.14",
@@ -23106,12 +25149,14 @@ module.exports={
   "readme": "# Elliptic [![Build Status](https://secure.travis-ci.org/indutny/elliptic.png)](http://travis-ci.org/indutny/elliptic)\n\nFast elliptic-curve cryptography in a plain javascript implementation.\n\nNOTE: Please take a look at http://safecurves.cr.yp.to/ before choosing a curve\nfor your cryptography operations.\n\n## Incentive\n\nECC is much slower than regular RSA cryptography, the JS implementations are\neven more slower.\n\n## Benchmarks\n\n```bash\n$ node benchmarks/index.js\nBenchmarking: sign\nelliptic#sign x 262 ops/sec ±0.51% (177 runs sampled)\neccjs#sign x 55.91 ops/sec ±0.90% (144 runs sampled)\n------------------------\nFastest is elliptic#sign\n========================\nBenchmarking: verify\nelliptic#verify x 113 ops/sec ±0.50% (166 runs sampled)\neccjs#verify x 48.56 ops/sec ±0.36% (125 runs sampled)\n------------------------\nFastest is elliptic#verify\n========================\nBenchmarking: gen\nelliptic#gen x 294 ops/sec ±0.43% (176 runs sampled)\neccjs#gen x 62.25 ops/sec ±0.63% (129 runs sampled)\n------------------------\nFastest is elliptic#gen\n========================\nBenchmarking: ecdh\nelliptic#ecdh x 136 ops/sec ±0.85% (156 runs sampled)\n------------------------\nFastest is elliptic#ecdh\n========================\n```\n\n## API\n\n### ECDSA\n\n```javascript\nvar EC = require('elliptic').ec;\n\n// Create and initialize EC context\n// (better do it once and reuse it)\nvar ec = new EC('secp256k1');\n\n// Generate keys\nvar key = ec.genKeyPair();\n\n// Sign message (must be an array, or it'll be treated as a hex sequence)\nvar msg = [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ];\nvar signature = key.sign(msg);\n\n// Export DER encoded signature in Array\nvar derSign = signature.toDER();\n\n// Verify signature\nconsole.log(key.verify(msg, derSign));\n```\n\n### ECDH\n\n```javascript\n// Generate keys\nvar key1 = ec.genKeyPair();\nvar key2 = ec.genKeyPair();\n\nvar shared1 = key1.derive(key2.getPublic());\nvar shared2 = key2.derive(key1.getPublic());\n\nconsole.log('Both shared secrets are BN instances');\nconsole.log(shared1.toString(16));\nconsole.log(shared2.toString(16));\n```\n\nNOTE: `.derive()` returns a [BN][1] instance.\n\n## Supported curves\n\nElliptic.js support following curve types:\n\n* Short Weierstrass\n* Montgomery\n* Edwards\n* Twisted Edwards\n\nFollowing curve 'presets' are embedded into the library:\n\n* `secp256k1`\n* `p192`\n* `p224`\n* `p256`\n* `curve25519`\n* `ed25519`\n\nNOTE: That `curve25519` could not be used for ECDSA, use `ed25519` instead.\n\n### Implementation details\n\nECDSA is using deterministic `k` value generation as per [RFC6979][0]. Most of\nthe curve operations are performed on non-affine coordinates (either projective\nor extended), various windowing techniques are used for different cases.\n\nAll operations are performed in reduction context using [bn.js][1], hashing is\nprovided by [hash.js][2]\n\n#### LICENSE\n\nThis software is licensed under the MIT License.\n\nCopyright Fedor Indutny, 2014.\n\nPermission is hereby granted, free of charge, to any person obtaining a\ncopy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to permit\npersons to whom the Software is furnished to do so, subject to the\nfollowing conditions:\n\nThe above copyright notice and this permission notice shall be included\nin all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS\nOR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN\nNO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,\nDAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR\nOTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE\nUSE OR OTHER DEALINGS IN THE SOFTWARE.\n\n[0]: http://tools.ietf.org/html/rfc6979\n[1]: https://github.com/indutny/bn.js\n[2]: https://github.com/indutny/hash.js\n",
   "readmeFilename": "README.md",
   "_id": "elliptic@0.15.14",
-  "_shasum": "4d8cc82f030f9c7646ac60a729f0f793e083be6e",
+  "dist": {
+    "shasum": "4120c6c1d18856d59dbcf69aec20c9a4e9bfaacd"
+  },
   "_from": "elliptic@^0.15.14",
   "_resolved": "https://registry.npmjs.org/elliptic/-/elliptic-0.15.14.tgz"
 }
 
-},{}],198:[function(require,module,exports){
+},{}],161:[function(require,module,exports){
 exports.strip = function strip(artifact) {
   artifact = artifact.toString()
   var startRegex = /^-----BEGIN (.*)-----\n/;
@@ -23145,7 +25190,7 @@ exports.assemble = function assemble(info) {
   var endLine = "-----END " + tag + "-----";
   return startLine + "\n" + wrap(base64, 64) + "\n" + endLine + "\n";
 }
-},{}],199:[function(require,module,exports){
+},{}],162:[function(require,module,exports){
 (function (Buffer){
 var pemstrip = require('pemstrip');
 var asn1 = require('./asn1');
@@ -23224,7 +25269,7 @@ function decrypt(crypto, data, password) {
   return Buffer.concat(out);
 }
 }).call(this,require("buffer").Buffer)
-},{"./aesid.json":159,"./asn1":161,"buffer":136,"pemstrip":198}],200:[function(require,module,exports){
+},{"./aesid.json":122,"./asn1":124,"buffer":99,"pemstrip":161}],163:[function(require,module,exports){
 (function (Buffer){
 // much of this based on https://github.com/indutny/self-signed/blob/gh-pages/lib/rsa.js
 var parseKeys = require('./parseKeys');
@@ -23282,7 +25327,7 @@ function ecSign(hash, priv, crypto) {
   return new Buffer(out.toDER());
 }
 }).call(this,require("buffer").Buffer)
-},{"./parseKeys":199,"bn.js":177,"buffer":136,"elliptic":178}],201:[function(require,module,exports){
+},{"./parseKeys":162,"bn.js":140,"buffer":99,"elliptic":141}],164:[function(require,module,exports){
 (function (Buffer){
 // much of this based on https://github.com/indutny/self-signed/blob/gh-pages/lib/rsa.js
 var parseKeys = require('./parseKeys');
@@ -23319,7 +25364,7 @@ function ecVerify(sig, hash, pub) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"./parseKeys":199,"bn.js":177,"buffer":136,"elliptic":178}],202:[function(require,module,exports){
+},{"./parseKeys":162,"bn.js":140,"buffer":99,"elliptic":141}],165:[function(require,module,exports){
 (function (Buffer){
 var BN = require('bn.js');
 var MillerRabin = require('miller-rabin');
@@ -23479,7 +25524,7 @@ function returnValue(bn, enc) {
 	}
 }
 }).call(this,require("buffer").Buffer)
-},{"./generatePrime":203,"bn.js":205,"buffer":136,"miller-rabin":206}],203:[function(require,module,exports){
+},{"./generatePrime":166,"bn.js":168,"buffer":99,"miller-rabin":169}],166:[function(require,module,exports){
 
 module.exports = findPrime;
 findPrime.simpleSieve = simpleSieve;
@@ -23596,7 +25641,7 @@ function findPrime(bits, gen ,crypto) {
   }
 
 }
-},{"bn.js":205,"miller-rabin":206}],204:[function(require,module,exports){
+},{"bn.js":168,"miller-rabin":169}],167:[function(require,module,exports){
 (function (Buffer){
 var primes = require('./primes.json');
 var DH = require('./dh');
@@ -23635,9 +25680,9 @@ module.exports = function (crypto, exports) {
 	};
 }
 }).call(this,require("buffer").Buffer)
-},{"./dh":202,"./generatePrime":203,"./primes.json":208,"buffer":136}],205:[function(require,module,exports){
-module.exports=require(177)
-},{"c:\\Users\\compaq\\AppData\\Roaming\\npm\\node_modules\\browserify\\node_modules\\crypto-browserify\\node_modules\\browserify-sign\\node_modules\\bn.js\\lib\\bn.js":177}],206:[function(require,module,exports){
+},{"./dh":165,"./generatePrime":166,"./primes.json":171,"buffer":99}],168:[function(require,module,exports){
+module.exports=require(140)
+},{"c:\\Users\\adasq\\AppData\\Roaming\\npm\\node_modules\\browserify\\node_modules\\crypto-browserify\\node_modules\\browserify-sign\\node_modules\\bn.js\\lib\\bn.js":140}],169:[function(require,module,exports){
 var bn = require('bn.js');
 var brorand = require('brorand');
 
@@ -23753,9 +25798,9 @@ MillerRabin.prototype.getDivisor = function getDivisor(n, k) {
   return prime;
 };
 
-},{"bn.js":205,"brorand":207}],207:[function(require,module,exports){
-module.exports=require(190)
-},{"c:\\Users\\compaq\\AppData\\Roaming\\npm\\node_modules\\browserify\\node_modules\\crypto-browserify\\node_modules\\browserify-sign\\node_modules\\elliptic\\node_modules\\brorand\\index.js":190}],208:[function(require,module,exports){
+},{"bn.js":168,"brorand":170}],170:[function(require,module,exports){
+module.exports=require(153)
+},{"c:\\Users\\adasq\\AppData\\Roaming\\npm\\node_modules\\browserify\\node_modules\\crypto-browserify\\node_modules\\browserify-sign\\node_modules\\elliptic\\node_modules\\brorand\\index.js":153}],171:[function(require,module,exports){
 module.exports={
     "modp1": {
         "gen": "02",
@@ -23790,7 +25835,7 @@ module.exports={
         "prime": "ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece45b3dc2007cb8a163bf0598da48361c55d39a69163fa8fd24cf5f83655d23dca3ad961c62f356208552bb9ed529077096966d670c354e4abc9804f1746c08ca18217c32905e462e36ce3be39e772c180e86039b2783a2ec07a28fb5c55df06f4c52c9de2bcbf6955817183995497cea956ae515d2261898fa051015728e5a8aaac42dad33170d04507a33a85521abdf1cba64ecfb850458dbef0a8aea71575d060c7db3970f85a6e1e4c7abf5ae8cdb0933d71e8c94e04a25619dcee3d2261ad2ee6bf12ffa06d98a0864d87602733ec86a64521f2b18177b200cbbe117577a615d6c770988c0bad946e208e24fa074e5ab3143db5bfce0fd108e4b82d120a92108011a723c12a787e6d788719a10bdba5b2699c327186af4e23c1a946834b6150bda2583e9ca2ad44ce8dbbbc2db04de8ef92e8efc141fbecaa6287c59474e6bc05d99b2964fa090c3a2233ba186515be7ed1f612970cee2d7afb81bdd762170481cd0069127d5b05aa993b4ea988d8fddc186ffb7dc90a6c08f4df435c93402849236c3fab4d27c7026c1d4dcb2602646dec9751e763dba37bdf8ff9406ad9e530ee5db382f413001aeb06a53ed9027d831179727b0865a8918da3edbebcf9b14ed44ce6cbaced4bb1bdb7f1447e6cc254b332051512bd7af426fb8f401378cd2bf5983ca01c64b92ecf032ea15d1721d03f482d7ce6e74fef6d55e702f46980c82b5a84031900b1c9e59e7c97fbec7e8f323a97a7e36cc88be0f1d45b7ff585ac54bd407b22b4154aacc8f6d7ebf48e1d814cc5ed20f8037e0a79715eef29be32806a1d58bb7c5da76f550aa3d8a1fbff0eb19ccb1a313d55cda56c9ec2ef29632387fe8d76e3c0468043e8f663f4860ee12bf2d5b0b7474d6e694f91e6dbe115974a3926f12fee5e438777cb6a932df8cd8bec4d073b931ba3bc832b68d9dd300741fa7bf8afc47ed2576f6936ba424663aab639c5ae4f5683423b4742bf1c978238f16cbe39d652de3fdb8befc848ad922222e04a4037c0713eb57a81a23f0c73473fc646cea306b4bcbc8862f8385ddfa9d4b7fa2c087e879683303ed5bdd3a062b3cf5b3a278a66d2a13f83f44f82ddf310ee074ab6a364597e899a0255dc164f31cc50846851df9ab48195ded7ea1b1d510bd7ee74d73faf36bc31ecfa268359046f4eb879f924009438b481c6cd7889a002ed5ee382bc9190da6fc026e479558e4475677e9aa9e3050e2765694dfc81f56e880b96e7160c980dd98edd3dfffffffffffffffff"
     }
 }
-},{}],209:[function(require,module,exports){
+},{}],172:[function(require,module,exports){
 (function (Buffer){
 module.exports = function(crypto) {
   function pbkdf2(password, salt, iterations, keylen, digest, callback) {
@@ -23878,7 +25923,7 @@ module.exports = function(crypto) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":136}],210:[function(require,module,exports){
+},{"buffer":99}],173:[function(require,module,exports){
 (function (Buffer){
 
 module.exports = ripemd160
@@ -24087,7 +26132,7 @@ function ripemd160(message) {
 
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":136}],211:[function(require,module,exports){
+},{"buffer":99}],174:[function(require,module,exports){
 module.exports = function (Buffer) {
 
   //prototype class for hash functions
@@ -24166,7 +26211,7 @@ module.exports = function (Buffer) {
   return Hash
 }
 
-},{}],212:[function(require,module,exports){
+},{}],175:[function(require,module,exports){
 var exports = module.exports = function (alg) {
   var Alg = exports[alg]
   if(!Alg) throw new Error(alg + ' is not supported (we accept pull requests)')
@@ -24180,7 +26225,7 @@ exports.sha1 = require('./sha1')(Buffer, Hash)
 exports.sha256 = require('./sha256')(Buffer, Hash)
 exports.sha512 = require('./sha512')(Buffer, Hash)
 
-},{"./hash":211,"./sha1":213,"./sha256":214,"./sha512":215,"buffer":136}],213:[function(require,module,exports){
+},{"./hash":174,"./sha1":176,"./sha256":177,"./sha512":178,"buffer":99}],176:[function(require,module,exports){
 /*
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-1, as defined
  * in FIPS PUB 180-1
@@ -24320,7 +26365,7 @@ module.exports = function (Buffer, Hash) {
   return Sha1
 }
 
-},{"util":245}],214:[function(require,module,exports){
+},{"util":208}],177:[function(require,module,exports){
 
 /**
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-256, as defined
@@ -24469,7 +26514,7 @@ module.exports = function (Buffer, Hash) {
 
 }
 
-},{"util":245}],215:[function(require,module,exports){
+},{"util":208}],178:[function(require,module,exports){
 var inherits = require('util').inherits
 
 module.exports = function (Buffer, Hash) {
@@ -24715,7 +26760,7 @@ module.exports = function (Buffer, Hash) {
 
 }
 
-},{"util":245}],216:[function(require,module,exports){
+},{"util":208}],179:[function(require,module,exports){
 var pbkdf2Export = require('pbkdf2-compat/pbkdf2')
 
 module.exports = function (crypto, exports) {
@@ -24729,7 +26774,7 @@ module.exports = function (crypto, exports) {
   return exports
 }
 
-},{"pbkdf2-compat/pbkdf2":209}],217:[function(require,module,exports){
+},{"pbkdf2-compat/pbkdf2":172}],180:[function(require,module,exports){
 (function (global,Buffer){
 (function() {
   var g = ('undefined' === typeof window ? global : window) || {}
@@ -24759,7 +26804,7 @@ module.exports = function (crypto, exports) {
 }())
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"buffer":136,"crypto":135}],218:[function(require,module,exports){
+},{"buffer":99,"crypto":98}],181:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -25062,7 +27107,7 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],219:[function(require,module,exports){
+},{}],182:[function(require,module,exports){
 var http = module.exports;
 var EventEmitter = require('events').EventEmitter;
 var Request = require('./lib/request');
@@ -25208,7 +27253,7 @@ http.STATUS_CODES = {
     510 : 'Not Extended',               // RFC 2774
     511 : 'Network Authentication Required' // RFC 6585
 };
-},{"./lib/request":220,"events":218,"url":243}],220:[function(require,module,exports){
+},{"./lib/request":183,"events":181,"url":206}],183:[function(require,module,exports){
 var Stream = require('stream');
 var Response = require('./response');
 var Base64 = require('Base64');
@@ -25419,7 +27464,7 @@ var isXHR2Compatible = function (obj) {
     if (typeof FormData !== 'undefined' && obj instanceof FormData) return true;
 };
 
-},{"./response":221,"Base64":222,"inherits":223,"stream":241}],221:[function(require,module,exports){
+},{"./response":184,"Base64":185,"inherits":186,"stream":204}],184:[function(require,module,exports){
 var Stream = require('stream');
 var util = require('util');
 
@@ -25541,7 +27586,7 @@ var isArray = Array.isArray || function (xs) {
     return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{"stream":241,"util":245}],222:[function(require,module,exports){
+},{"stream":204,"util":208}],185:[function(require,module,exports){
 ;(function () {
 
   var object = typeof exports != 'undefined' ? exports : this; // #8: web workers
@@ -25603,7 +27648,7 @@ var isArray = Array.isArray || function (xs) {
 
 }());
 
-},{}],223:[function(require,module,exports){
+},{}],186:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -25628,9 +27673,9 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],224:[function(require,module,exports){
-module.exports=require(38)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\has-binary\\node_modules\\isarray\\index.js":38}],225:[function(require,module,exports){
+},{}],187:[function(require,module,exports){
+module.exports=require(39)
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\has-binary\\node_modules\\isarray\\index.js":39}],188:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -25718,7 +27763,7 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
-},{}],226:[function(require,module,exports){
+},{}],189:[function(require,module,exports){
 (function (global){
 /*! http://mths.be/punycode v1.2.4 by @mathias */
 ;(function(root) {
@@ -26229,7 +28274,7 @@ process.chdir = function (dir) {
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],227:[function(require,module,exports){
+},{}],190:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -26315,7 +28360,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],228:[function(require,module,exports){
+},{}],191:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -26402,16 +28447,16 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],229:[function(require,module,exports){
+},{}],192:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":227,"./encode":228}],230:[function(require,module,exports){
+},{"./decode":190,"./encode":191}],193:[function(require,module,exports){
 module.exports = require("./lib/_stream_duplex.js")
 
-},{"./lib/_stream_duplex.js":231}],231:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":194}],194:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -26504,7 +28549,7 @@ function forEach (xs, f) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_readable":233,"./_stream_writable":235,"_process":225,"core-util-is":236,"inherits":223}],232:[function(require,module,exports){
+},{"./_stream_readable":196,"./_stream_writable":198,"_process":188,"core-util-is":199,"inherits":186}],195:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -26552,7 +28597,7 @@ PassThrough.prototype._transform = function(chunk, encoding, cb) {
   cb(null, chunk);
 };
 
-},{"./_stream_transform":234,"core-util-is":236,"inherits":223}],233:[function(require,module,exports){
+},{"./_stream_transform":197,"core-util-is":199,"inherits":186}],196:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -27538,7 +29583,7 @@ function indexOf (xs, x) {
 }
 
 }).call(this,require('_process'))
-},{"_process":225,"buffer":136,"core-util-is":236,"events":218,"inherits":223,"isarray":224,"stream":241,"string_decoder/":242}],234:[function(require,module,exports){
+},{"_process":188,"buffer":99,"core-util-is":199,"events":181,"inherits":186,"isarray":187,"stream":204,"string_decoder/":205}],197:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -27750,7 +29795,7 @@ function done(stream, er) {
   return stream.push(null);
 }
 
-},{"./_stream_duplex":231,"core-util-is":236,"inherits":223}],235:[function(require,module,exports){
+},{"./_stream_duplex":194,"core-util-is":199,"inherits":186}],198:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -28140,7 +30185,7 @@ function endWritable(stream, state, cb) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":231,"_process":225,"buffer":136,"core-util-is":236,"inherits":223,"stream":241}],236:[function(require,module,exports){
+},{"./_stream_duplex":194,"_process":188,"buffer":99,"core-util-is":199,"inherits":186,"stream":204}],199:[function(require,module,exports){
 (function (Buffer){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -28250,10 +30295,10 @@ function objectToString(o) {
   return Object.prototype.toString.call(o);
 }
 }).call(this,require("buffer").Buffer)
-},{"buffer":136}],237:[function(require,module,exports){
+},{"buffer":99}],200:[function(require,module,exports){
 module.exports = require("./lib/_stream_passthrough.js")
 
-},{"./lib/_stream_passthrough.js":232}],238:[function(require,module,exports){
+},{"./lib/_stream_passthrough.js":195}],201:[function(require,module,exports){
 var Stream = require('stream'); // hack to fix a circular dependency issue when used with browserify
 exports = module.exports = require('./lib/_stream_readable.js');
 exports.Stream = Stream;
@@ -28263,13 +30308,13 @@ exports.Duplex = require('./lib/_stream_duplex.js');
 exports.Transform = require('./lib/_stream_transform.js');
 exports.PassThrough = require('./lib/_stream_passthrough.js');
 
-},{"./lib/_stream_duplex.js":231,"./lib/_stream_passthrough.js":232,"./lib/_stream_readable.js":233,"./lib/_stream_transform.js":234,"./lib/_stream_writable.js":235,"stream":241}],239:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":194,"./lib/_stream_passthrough.js":195,"./lib/_stream_readable.js":196,"./lib/_stream_transform.js":197,"./lib/_stream_writable.js":198,"stream":204}],202:[function(require,module,exports){
 module.exports = require("./lib/_stream_transform.js")
 
-},{"./lib/_stream_transform.js":234}],240:[function(require,module,exports){
+},{"./lib/_stream_transform.js":197}],203:[function(require,module,exports){
 module.exports = require("./lib/_stream_writable.js")
 
-},{"./lib/_stream_writable.js":235}],241:[function(require,module,exports){
+},{"./lib/_stream_writable.js":198}],204:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -28398,7 +30443,7 @@ Stream.prototype.pipe = function(dest, options) {
   return dest;
 };
 
-},{"events":218,"inherits":223,"readable-stream/duplex.js":230,"readable-stream/passthrough.js":237,"readable-stream/readable.js":238,"readable-stream/transform.js":239,"readable-stream/writable.js":240}],242:[function(require,module,exports){
+},{"events":181,"inherits":186,"readable-stream/duplex.js":193,"readable-stream/passthrough.js":200,"readable-stream/readable.js":201,"readable-stream/transform.js":202,"readable-stream/writable.js":203}],205:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -28621,7 +30666,7 @@ function base64DetectIncompleteChar(buffer) {
   this.charLength = this.charReceived ? 3 : 0;
 }
 
-},{"buffer":136}],243:[function(require,module,exports){
+},{"buffer":99}],206:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -29330,14 +31375,14 @@ function isNullOrUndefined(arg) {
   return  arg == null;
 }
 
-},{"punycode":226,"querystring":229}],244:[function(require,module,exports){
+},{"punycode":189,"querystring":192}],207:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],245:[function(require,module,exports){
+},{}],208:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -29927,7 +31972,7 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":244,"_process":225,"inherits":223}],246:[function(require,module,exports){
+},{"./support/isBuffer":207,"_process":188,"inherits":186}],209:[function(require,module,exports){
 var indexOf = require('indexof');
 
 var Object_keys = function (obj) {
@@ -30067,6 +32112,6 @@ exports.createContext = Script.createContext = function (context) {
     return copy;
 };
 
-},{"indexof":247}],247:[function(require,module,exports){
-module.exports=require(39)
-},{"c:\\GIT\\bootstrap-clear\\node_modules\\socket.io-client\\node_modules\\indexof\\index.js":39}]},{},[131]);
+},{"indexof":210}],210:[function(require,module,exports){
+module.exports=require(40)
+},{"c:\\GIT\\1000\\rpc-1000\\node_modules\\socket.io-client\\node_modules\\indexof\\index.js":40}]},{},[94]);

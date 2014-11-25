@@ -13,6 +13,7 @@
   	  "grunt": "~0.4.1", 
       "underscore": "",
       "grunt-traceur": "",
+      "q": "",
   	  "grunt-cli": "",
       "grunt-contrib-less": "",
   	  "grunt-contrib-watch": "^0.4.4"

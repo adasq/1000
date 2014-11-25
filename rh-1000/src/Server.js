@@ -1,7 +1,7 @@
 var 
 express = require('express'),
-getRoutes = require('./routes/get'),
-postRoutes = require('./routes/post'),
+// getRoutes = require('./routes/get'),
+// postRoutes = require('./routes/post'),
 SocketManager = require('./socketManager'),
 config = require('../config'),
 _ = require('underscore');
@@ -24,12 +24,12 @@ var app = express();
 });
 var server = require('http').createServer(app);
 
-_.each(postRoutes, function(route){
-		app.post(route.url, route.callback);
-});
-_.each(getRoutes, function(route){
-		app.get(route.url, route.callback);
-});
+// _.each(postRoutes, function(route){
+// 		app.post(route.url, route.callback);
+// });
+// _.each(getRoutes, function(route){
+// 		app.get(route.url, route.callback);
+// });
 server.listen(app.get('port'), app.get('ipaddr'), function(){
 	console.log('Express server listening on  IP: ' + app.get('ipaddr') + ' and port ' + app.get('port'));
 	that.socketManager = new SocketManager(server);

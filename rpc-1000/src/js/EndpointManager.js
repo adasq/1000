@@ -1,3 +1,4 @@
+var RPCManager = require('./RPCManager.js');
 
 function makeid(){
     var text = "";
@@ -56,5 +57,31 @@ var EndpointManager = function(url){
   };
 
 };
+
+
+
+
+var rpcManager = new RPCManager(EndpointManager);
+
+var klient = {
+  // output ============================
+  throwCard: function(cid){},
+  
+  //input ===========================
+  onCardToClient: function(cid){
+    //console.log(this);
+    this.throwCard('throwCard').then(function(result){
+      console.log(result);
+    });
+  },  
+  
+};
+
+rpcManager.prepare(klient);
+rpcManager.prepareOutputResponses();
+
+
+
+
 
 module.exports = EndpointManager;

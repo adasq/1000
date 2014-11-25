@@ -7,13 +7,6 @@ Server = require('./Server'),
 config = require('../config');
 
 
- 
-console.log('xd2');
-
-
-
-
- return;
 var server = new Server();
 server.init(function(){
 console.log("----------------------------------------------------------------------");
