@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>TABLE</title>
+
+<script src="rpc-bundle.js"></script> 
+
+<script>
+  var endpoint = new RPC.EndpointManager('http://localhost');
+
+ 
+
+  endpoint.onMessage(function(msg) {
+    console.log('otrzymalem z serwera',msg);
+  });
+
+  setTimeout(function() {
+    endpoint.authorize('adamek');
+
+
+  }, 1000);
+
+</script>
+
+
+</head>
+
+<body>
+  table
+
+</body>
+</html>
+
+
+ 

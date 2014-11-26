@@ -19,7 +19,7 @@ var gameInputManager = {
 	},
 	onMessage: function(aid, msg) {
 		console.log('!!!!!!!!!! onMessage ', aid, msg);
-		gameOutputManager.send(aid, {response: 'yarly'})
+		gameOutputManager.send(aid, {type: 'response', data: {wt: 'f'} })
 	}	
 };
 

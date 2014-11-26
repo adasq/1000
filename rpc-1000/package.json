@@ -12,9 +12,9 @@
       "express": "~3.4.4",
   	  "grunt": "~0.4.1", 
       "underscore": "",
-      "grunt-traceur": "",
-      "q": "",
+      "q": "",      
   	  "grunt-cli": "",
+      "grunt-browserify": "",
       "grunt-contrib-less": "",
   	  "grunt-contrib-watch": "^0.4.4"
   },

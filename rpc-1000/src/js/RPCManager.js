@@ -20,9 +20,53 @@ var getInputTypeCallbacks= function(callbacks){
 };
 
 //============================================
-var RPCManager = function(){
-  
+var RPCManager = function(communicationManager){
+  this.communicationManager= communicationManager;
+  var that = this;
+  this.promiseStack = [];
+
+  if(!communicationManager)return;
+  communicationManager.onMessage(function(msg){
+
+    var msgType = msg.type;
+    var msgObj = msg.data;
+
+    var messageTypeBehavior = {
+      response: function(obj){
+        that.promiseStack[0].resolve(obj);
+        that.promiseStack= [];
+      }
+    };
+
+    messageTypeBehavior[msgType](msgObj);
+  });
+
+
 };
+
+
+
+
+RPCManager.prototype.prepareOutputResponses = function(){
+var thisX = {
+  id: 1
+};
+var that = this;
+_.each(this.outputTypeCallbacks, function(callback){
+  that.callbacks[callback.name] = function(){
+    var deferred = q.defer();
+    that.communicationManager.send(_.object(callback.args, arguments)); 
+    that.promiseStack.push(deferred);
+    return deferred.promise;
+  };
+});
+
+};
+
+
+
+
+
 
 
 
@@ -32,32 +76,16 @@ var callbacksInfo = [];
 _.each(callbacks, function(fn, name){
   callbacksInfo.push({
     name: name,
+    fn: fn,
     normalizedName: name.toLowerCase(),
     isOutputFn: !!(name.toLowerCase().substr(0,2) === "on"),
     args: getParamsByFn(fn.toString())
   });
 });
 
-
+this.callbacks = callbacks;
 this.inputTypeCallbacks = getInputTypeCallbacks(callbacksInfo);
 this.outputTypeCallbacks = getOutputTypeCallbacks(callbacksInfo);
-
-};
-
-RPCManager.prototype.prepareOutputResponses = function(){
-var thisX = {
-  id: 1
-};
-_.each(this.outputTypeCallbacks, function(callback){
-  thisX[callback.name]= function(){
-    var deferred = q.defer();
-    console.log(callback.name+' called');
-    setTimeout(function(){
-      deferred.resolve({ans:'wer'});
-    }, 200);
-    return deferred.promise;
-  };
-});
 
 };
 

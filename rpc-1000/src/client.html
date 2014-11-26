@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>CLIENT</title>
+
+<script src="rpc-bundle.js"></script> 
+
+<script>
+
+  var klient = {
+  // output ============================
+  throwCard: function(cid){},
+  
+  //input ===========================
+  onCardToClient: function(cid){
+    //console.log(this);
+    this.throwCard('throwCard').then(function(result){
+      console.log(result);
+    });
+  },  
+  
+};
+
+  var endpoint = new RPC.EndpointManager('http://localhost', klient);
+
+
+  setTimeout(function() {
+    endpoint.authorize('adamek');
+  }, 1000);
+
+</script>
+
+
+</head>
+
+<body>
+  klient
+
+</body>
+</html>
+
+
+ 

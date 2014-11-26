@@ -38,9 +38,9 @@ var CommunicationManager = function(socket){
     socket.emit('message', msg);
   };
 };
+//===================================================
 
-
-var EndpointManager = function(url){
+var EndpointManager = function(url, inputOutputAPIMethods){
   var socket = require('socket.io-client')(url);
   var cm = new CommunicationManager(socket);
 
@@ -56,32 +56,11 @@ var EndpointManager = function(url){
    cm.onMessage(callback);
   };
 
+  this.rpcManager = new RPCManager(this);
+  this.rpcManager.prepare(inputOutputAPIMethods);
+  this.rpcManager.prepareOutputResponses();
+
 };
-
-
-
-
-var rpcManager = new RPCManager(EndpointManager);
-
-var klient = {
-  // output ============================
-  throwCard: function(cid){},
-  
-  //input ===========================
-  onCardToClient: function(cid){
-    //console.log(this);
-    this.throwCard('throwCard').then(function(result){
-      console.log(result);
-    });
-  },  
-  
-};
-
-rpcManager.prepare(klient);
-rpcManager.prepareOutputResponses();
-
-
-
 
 
 module.exports = EndpointManager;
