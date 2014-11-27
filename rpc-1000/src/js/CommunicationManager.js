@@ -15,7 +15,7 @@ function makeid(){
 
 var CommunicationManager = function(gameInputManager, gameOutputManager){
 	var that= this;
-	this.clients = new Clients();	
+	gameInputManager.clients = this.clients = new Clients();	
 
 	gameOutputManager.send = function(id, msg){
 		var client = that.clients.getClientByAid(id);
@@ -33,17 +33,17 @@ var CommunicationManager = function(gameInputManager, gameOutputManager){
 		that.clients.addClient(aid); 
 	});
 //----------------------------------------
-	this.onAuthorize(function(aid, msg){
-		var client = that.clients.getClientByAid(msg.aid);
+	this.onAuthorize(function(aid, data){
+		console.log('onAuthorize::::', arguments)
+		var client = that.clients.getClientByAid(aid);
 		if(!client){
 			return;
 		}
 		if(!client.isAuthorized){
-			that.clients.authorizePlayer(aid, msg.name);
+			that.clients.authorizePlayer(aid, data);
 			gameInputManager.onPlayerConnected(client.aid);				
 		}
-		
-		//that.clients.deleteUnauthorizedByAid(aid);		
+			
 		that.clients.toString();
 	});
 //----------------------------------------

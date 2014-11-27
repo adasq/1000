@@ -1,4 +1,5 @@
 var RPCManager = require('./RPCManager.js');
+var _ = require('underscore');
 
 function makeid(){
     var text = "";
@@ -29,9 +30,9 @@ var CommunicationManager = function(socket){
   };
   
 
-  this.authorize = function(playerName){
+  this.authorize = function(data){
     if(this.aid){ 
-      socket.emit('AUTHORIZE', {aid: that.aid, name: (playerName || null)});
+      socket.emit('AUTHORIZE', _.extend({aid: that.aid}, data));
     }
   };
   this.send = function(msg){

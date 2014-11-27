@@ -32212,6 +32212,9 @@ var _ = require('underscore');
 			var client = that.getClientByAid(aid);
 			client.isConnected = true;
 		};
+		this.getClients = function(){
+			return clients;
+		};
 		this.reAuthorize = function(aid){
 			var unAuthorized =  _.find(clients, function(client){
 				return client.isAuthorized === false;
@@ -32251,10 +32254,10 @@ var _ = require('underscore');
 				client.isConnected = false;
 			}
 		};		
-		this.authorizePlayer = function(aid, playerName) {
+		this.authorizePlayer = function(aid, data) {
 			var client = that.getClientByAid(aid);
-			client.name = playerName || client.name;
-			client.type = that.type.PLAYER;
+			client.name = data.name || client.name;
+			client.type = data.type || 'DEFAULT';
 			client.isAuthorized = true;
 		};
 		this.authorizeTable = function() {
@@ -32300,7 +32303,7 @@ function makeid(){
 
 var CommunicationManager = function(gameInputManager, gameOutputManager){
 	var that= this;
-	this.clients = new Clients();	
+	gameInputManager.clients = this.clients = new Clients();	
 
 	gameOutputManager.send = function(id, msg){
 		var client = that.clients.getClientByAid(id);
@@ -32318,17 +32321,17 @@ var CommunicationManager = function(gameInputManager, gameOutputManager){
 		that.clients.addClient(aid); 
 	});
 //----------------------------------------
-	this.onAuthorize(function(aid, msg){
-		var client = that.clients.getClientByAid(msg.aid);
+	this.onAuthorize(function(aid, data){
+		console.log('onAuthorize::::', arguments)
+		var client = that.clients.getClientByAid(aid);
 		if(!client){
 			return;
 		}
 		if(!client.isAuthorized){
-			that.clients.authorizePlayer(aid, msg.name);
+			that.clients.authorizePlayer(aid, data);
 			gameInputManager.onPlayerConnected(client.aid);				
 		}
-		
-		//that.clients.deleteUnauthorizedByAid(aid);		
+			
 		that.clients.toString();
 	});
 //----------------------------------------
@@ -32352,6 +32355,7 @@ return CommunicationManager;
 
 },{"./Clients.js":233,"underscore":232}],235:[function(require,module,exports){
 var RPCManager = require('./RPCManager.js');
+var _ = require('underscore');
 
 function makeid(){
     var text = "";
@@ -32382,9 +32386,9 @@ var CommunicationManager = function(socket){
   };
   
 
-  this.authorize = function(playerName){
+  this.authorize = function(data){
     if(this.aid){ 
-      socket.emit('AUTHORIZE', {aid: that.aid, name: (playerName || null)});
+      socket.emit('AUTHORIZE', _.extend({aid: that.aid}, data));
     }
   };
   this.send = function(msg){
@@ -32417,12 +32421,14 @@ var EndpointManager = function(url, inputOutputAPIMethods){
 
 
 module.exports = EndpointManager;
-},{"./RPCManager.js":237,"socket.io-client":146}],236:[function(require,module,exports){
+},{"./RPCManager.js":237,"socket.io-client":146,"underscore":232}],236:[function(require,module,exports){
 var SocketManager = require('./socketManager.js');
-var RPCManager = require('./RPCManager.js');
-
+var _ = require('underscore');
 
 var ProxyManager = function(server) {
+	this.responseQueue = [];
+	var that=this;
+
 	var socketManager = new SocketManager(server);
 	var CommunicationManager = require('./CommunicationManager.js')(socketManager);
 
@@ -32432,14 +32438,31 @@ var gameOutputManager = {
 
 var gameInputManager = {	
 	onPlayerReconnected: function(aid){
-		console.log('!!!!!!!!!! onPlayerREconnected ', aid);		
+		console.log('!!!!!!!!!! onPlayerReconnected ', aid);	 
+		var clients = this.clients.getClients();
+		_.each(clients, function(client){
+			gameOutputManager.send(client.aid, {type: 'clients', data: clients })
+		});	
 	},	
 	onPlayerConnected: function(aid){
 		console.log('!!!!!!!!!! onPlayerConnected ', aid);
 	},
 	onMessage: function(aid, msg) {
-		console.log('!!!!!!!!!! onMessage ', aid, msg);
-		gameOutputManager.send(aid, {type: 'response', data: {wt: 'f'} })
+		console.log('!!!!!!!!!! onMessage ', aid, msg);		
+		if(msg.type && msg.type === 'message'){
+			that.responseQueue.push({
+				source: aid,
+				target: msg.target
+			});
+			gameOutputManager.send(msg.target, {type: 'message', data: msg.data })
+		}else if(msg.type && msg.type === 'response'){
+			var responseTarget = that.responseQueue[0].source; 
+			gameOutputManager.send(responseTarget, {type: 'response', data: msg.data })
+		}else{
+			gameOutputManager.send(aid, {type: 'response', data: {r: 'ly'} })
+		}
+
+			
 	}	
 };
 
@@ -32448,38 +32471,10 @@ var gameInputManager = {
 
 
 
-var rpcManager = new RPCManager();
-
-
-
-var server = {
-  // output ============================
-  cardToClient: function(cid){},
-  
-  //input ===========================
-  onThrowCard: function(cid){
-    //console.log(this);
-    this.cardToClient('xd').then(function(result){
-      console.log(result);
-    });
-  },  
-  
-};
-
-rpcManager.prepare(server);
-
-
-console.log(rpcManager.inputTypeCallbacks);
-console.log('-----')
-console.log(rpcManager.outputTypeCallbacks);
-
-rpcManager.prepareOutputResponses();
-
-
 };
 
 module.exports = ProxyManager;
-},{"./CommunicationManager.js":234,"./RPCManager.js":237,"./socketManager.js":239}],237:[function(require,module,exports){
+},{"./CommunicationManager.js":234,"./socketManager.js":239,"underscore":232}],237:[function(require,module,exports){
 var _ = require('underscore');
 var q = require('q');
 
@@ -32505,18 +32500,30 @@ var getInputTypeCallbacks= function(callbacks){
 var RPCManager = function(communicationManager){
   this.communicationManager= communicationManager;
   var that = this;
+  this.clients = [];
   this.promiseStack = [];
 
   if(!communicationManager)return;
   communicationManager.onMessage(function(msg){
+    console.log(msg);
 
     var msgType = msg.type;
     var msgObj = msg.data;
-
     var messageTypeBehavior = {
       response: function(obj){
         that.promiseStack[0].resolve(obj);
         that.promiseStack= [];
+      },
+      clients: function(obj){
+          that.clients= obj;
+          console.log('CLIENTS: ',obj);
+      },
+      message: function(obj){
+          communicationManager.send({
+            type: 'response',
+            data: 'toJestOdTable :D'
+          });
+          console.log('MESSAGE:',obj);
       }
     };
 
@@ -32530,27 +32537,37 @@ var RPCManager = function(communicationManager){
 
 
 RPCManager.prototype.prepareOutputResponses = function(){
-var thisX = {
-  id: 1
-};
+
 var that = this;
+
+var findTargetByType = function(type){
+  return _.find(that.clients, function(client){
+    return client.type === type;
+  });
+};
+
+
 _.each(this.outputTypeCallbacks, function(callback){
+  var targetType = callback.fn();
   that.callbacks[callback.name] = function(){
     var deferred = q.defer();
-    that.communicationManager.send(_.object(callback.args, arguments)); 
+    var target = findTargetByType(targetType);
+
+    var targetNodeData = {
+      args: _.object(callback.args, arguments),
+      handleMethod: 'on'+callback.normalizedName
+    }
+
+    that.communicationManager.send({
+      data: targetNodeData,
+      type: 'message',       
+      target: target.aid}); 
     that.promiseStack.push(deferred);
     return deferred.promise;
   };
 });
 
 };
-
-
-
-
-
-
-
 
 RPCManager.prototype.prepare = function(callbacks){
 var callbacksInfo = [];
@@ -32662,7 +32679,8 @@ var SocketManager = function(server){
 
 			socket.on('AUTHORIZE', function(msg){
 				console.log(msg, 'AUTHORIZE')
-				that.onAuthorizeCallback.apply(that, [authorizeId, msg]);
+				that.onAuthorizeCallback.apply(that, [authorizeId, 
+					{type: msg.type, name: msg.name}]);
 			});
 
 			socket.on('disconnect', function () {

@@ -23,18 +23,30 @@ var getInputTypeCallbacks= function(callbacks){
 var RPCManager = function(communicationManager){
   this.communicationManager= communicationManager;
   var that = this;
+  this.clients = [];
   this.promiseStack = [];
 
   if(!communicationManager)return;
   communicationManager.onMessage(function(msg){
+    console.log(msg);
 
     var msgType = msg.type;
     var msgObj = msg.data;
-
     var messageTypeBehavior = {
       response: function(obj){
         that.promiseStack[0].resolve(obj);
         that.promiseStack= [];
+      },
+      clients: function(obj){
+          that.clients= obj;
+          console.log('CLIENTS: ',obj);
+      },
+      message: function(obj){
+          communicationManager.send({
+            type: 'response',
+            data: 'toJestOdTable :D'
+          });
+          console.log('MESSAGE:',obj);
       }
     };
 
@@ -48,27 +60,37 @@ var RPCManager = function(communicationManager){
 
 
 RPCManager.prototype.prepareOutputResponses = function(){
-var thisX = {
-  id: 1
-};
+
 var that = this;
+
+var findTargetByType = function(type){
+  return _.find(that.clients, function(client){
+    return client.type === type;
+  });
+};
+
+
 _.each(this.outputTypeCallbacks, function(callback){
+  var targetType = callback.fn();
   that.callbacks[callback.name] = function(){
     var deferred = q.defer();
-    that.communicationManager.send(_.object(callback.args, arguments)); 
+    var target = findTargetByType(targetType);
+
+    var targetNodeData = {
+      args: _.object(callback.args, arguments),
+      handleMethod: 'on'+callback.normalizedName
+    }
+
+    that.communicationManager.send({
+      data: targetNodeData,
+      type: 'message',       
+      target: target.aid}); 
     that.promiseStack.push(deferred);
     return deferred.promise;
   };
 });
 
 };
-
-
-
-
-
-
-
 
 RPCManager.prototype.prepare = function(callbacks){
 var callbacksInfo = [];

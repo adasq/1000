@@ -8,26 +8,23 @@
 
 <script>
 
-  var klient = {
+var klient = {
   // output ============================
-  throwCard: function(cid){},
-  
-  //input ===========================
+  throwCard: function(cid){
+    return 'TABLE';
+  },  
+  //input ==============================
   onCardToClient: function(cid){
     //console.log(this);
     this.throwCard('throwCard').then(function(result){
       console.log(result);
     });
-  },  
-  
+  }  
 };
 
-  var endpoint = new RPC.EndpointManager('http://localhost', klient);
+var endpoint = new RPC.EndpointManager('http://localhost', klient);
 
 
-  setTimeout(function() {
-    endpoint.authorize('adamek');
-  }, 1000);
 
 </script>
 

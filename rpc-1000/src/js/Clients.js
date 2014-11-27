@@ -24,6 +24,9 @@ var _ = require('underscore');
 			var client = that.getClientByAid(aid);
 			client.isConnected = true;
 		};
+		this.getClients = function(){
+			return clients;
+		};
 		this.reAuthorize = function(aid){
 			var unAuthorized =  _.find(clients, function(client){
 				return client.isAuthorized === false;
@@ -63,10 +66,10 @@ var _ = require('underscore');
 				client.isConnected = false;
 			}
 		};		
-		this.authorizePlayer = function(aid, playerName) {
+		this.authorizePlayer = function(aid, data) {
 			var client = that.getClientByAid(aid);
-			client.name = playerName || client.name;
-			client.type = that.type.PLAYER;
+			client.name = data.name || client.name;
+			client.type = data.type || 'DEFAULT';
 			client.isAuthorized = true;
 		};
 		this.authorizeTable = function() {

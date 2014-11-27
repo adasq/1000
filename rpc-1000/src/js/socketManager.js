@@ -39,7 +39,8 @@ var SocketManager = function(server){
 
 			socket.on('AUTHORIZE', function(msg){
 				console.log(msg, 'AUTHORIZE')
-				that.onAuthorizeCallback.apply(that, [authorizeId, msg]);
+				that.onAuthorizeCallback.apply(that, [authorizeId, 
+					{type: msg.type, name: msg.name}]);
 			});
 
 			socket.on('disconnect', function () {
