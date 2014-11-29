@@ -7,19 +7,19 @@
 <script src="rpc-bundle.js"></script> 
 
 <script>
-  var endpoint = new RPC.EndpointManager('http://localhost');
-
- 
-
-  endpoint.onMessage(function(msg) {
-    console.log('otrzymalem z serwera',msg);
-  });
-
-  setTimeout(function() {
-    endpoint.authorize('adamek');
-
-
-  }, 1000);
+var table = {
+  // output ============================
+  cardToClient: function(cid){
+    return 'CLIENT';
+  },  
+  //input ==============================
+  onThrowCard: function(cid){
+    console.log('onThrowCard', cid);
+    console.log(this);
+    return 'onThrowCard: '+cid;
+  }  
+};
+var endpoint = new RPC.EndpointManager('http://localhost', table);
 
 </script>
 

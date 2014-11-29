@@ -23,12 +23,10 @@ var getInputTypeCallbacks= function(callbacks){
 var RPCManager = function(communicationManager){
   this.communicationManager= communicationManager;
   var that = this;
-  this.clients = [];
   this.promiseStack = [];
 
   if(!communicationManager)return;
   communicationManager.onMessage(function(msg){
-    console.log(msg);
 
     var msgType = msg.type;
     var msgObj = msg.data;
@@ -38,15 +36,24 @@ var RPCManager = function(communicationManager){
         that.promiseStack= [];
       },
       clients: function(obj){
-          that.clients= obj;
+          that.rpcThis.clients= obj;
           console.log('CLIENTS: ',obj);
       },
       message: function(obj){
+          var callback = that.getInputMethodByName(obj.handleMethod);
+          console.log('callback:',callback);
+          console.log('resposne:',obj);
+          var realArgs = _.map(callback.args, function(argName) {
+            return obj.args[argName];
+          });
+          // callback.fn
+          console.log('realArgs:',realArgs);
+          that.rpcThis.custom = obj;
+          var responseResult = callback.fn.apply(that.rpcThis, realArgs);       
           communicationManager.send({
             type: 'response',
-            data: 'toJestOdTable :D'
+            data: responseResult
           });
-          console.log('MESSAGE:',obj);
       }
     };
 
@@ -56,7 +63,11 @@ var RPCManager = function(communicationManager){
 
 };
 
-
+RPCManager.prototype.getInputMethodByName = function(handleName){
+  return _.find(this.inputTypeCallbacks, function(callback){
+    return handleName === callback.normalizedName;  
+  });
+};
 
 
 RPCManager.prototype.prepareOutputResponses = function(){
@@ -64,15 +75,14 @@ RPCManager.prototype.prepareOutputResponses = function(){
 var that = this;
 
 var findTargetByType = function(type){
-  return _.find(that.clients, function(client){
+  return _.find(that.rpcThis.clients, function(client){
     return client.type === type;
   });
 };
 
-
 _.each(this.outputTypeCallbacks, function(callback){
   var targetType = callback.fn();
-  that.callbacks[callback.name] = function(){
+  that.rpcThis[callback.name] = function(){
     var deferred = q.defer();
     var target = findTargetByType(targetType);
 
@@ -105,37 +115,11 @@ _.each(callbacks, function(fn, name){
   });
 });
 
-this.callbacks = callbacks;
+this.rpcThis = callbacks;
+
 this.inputTypeCallbacks = getInputTypeCallbacks(callbacksInfo);
 this.outputTypeCallbacks = getOutputTypeCallbacks(callbacksInfo);
 
 };
 
-
 module.exports = RPCManager;
-
-
-
-
-
-
-
-
-
-
-//u usera:
-// var thisX = {
-//   id: 1
-// };
-// _.each(outputTypeCallbacks, function(callback){  
-//   thisX[callback.name]= function(){
-//     var deferred = Q.defer();
-//     console.log(callback.name+' called');
-//     setTimeout(function(){
-//       deferred.resolve({ans:'wer'});
-//     }, 200);
-//     return deferred.promise;
-//   };
-// });
-
-// server.onThrowCard.call(thisX, 'aaa');

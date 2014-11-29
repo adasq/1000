@@ -3,7 +3,6 @@ var express = require('express');
 var RPC = require('./js/rpc.js');
 
 
-
 	var app = express(); 
 	app.configure(function() {
 		app.set('port', 80);
