@@ -1,4 +1,3 @@
-var RPCManager = require('./RPCManager.js');
 var _ = require('underscore');
 
 function makeid(){
@@ -10,7 +9,7 @@ function makeid(){
     return text;
 }
 
-var CommunicationManager = function(socket){
+var ClientCommunicationManager = function(socket){
   var that = this;
   this.aid = sessionStorage['aid'] || null;
   //syn
@@ -39,29 +38,5 @@ var CommunicationManager = function(socket){
     socket.emit('message', msg);
   };
 };
-//===================================================
 
-var EndpointManager = function(url, inputOutputAPIMethods){
-  var socket = require('socket.io-client')(url);
-  var cm = new CommunicationManager(socket);
-
-  this.authorize = function(username) {
-    cm.authorize(username);
-  };
-
-  this.send = function(msg) {
-    cm.send(msg);
-  };
-
-  this.onMessage = function(callback) {
-   cm.onMessage(callback);
-  };
-
-  this.rpcManager = new RPCManager(this);
-  this.rpcManager.prepare(inputOutputAPIMethods);
-  this.rpcManager.prepareOutputResponses();
-
-};
-
-
-module.exports = EndpointManager;
+module.exports = ClientCommunicationManager

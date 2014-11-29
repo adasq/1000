@@ -5,7 +5,7 @@ module.exports = function ( grunt ) {
   var taskConfig = {
 	 watch: {
 	 	i: {
-	    files: ['src/js/*.js'],
+	    files: ['src/js/**/*.js'],
 	    tasks: ['browserify:dist'],
 	    options: {
 	    	livereload: true,
@@ -13,7 +13,6 @@ module.exports = function ( grunt ) {
 	    },
 	  },	  
 	 },
-
 
 
 browserify: {

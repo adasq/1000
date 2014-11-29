@@ -34,7 +34,6 @@ var CommunicationManager = function(gameInputManager, gameOutputManager){
 	});
 //----------------------------------------
 	this.onAuthorize(function(aid, data){
-		console.log('onAuthorize::::', arguments)
 		var client = that.clients.getClientByAid(aid);
 		if(!client){
 			return;
@@ -48,7 +47,8 @@ var CommunicationManager = function(gameInputManager, gameOutputManager){
 	});
 //----------------------------------------
 	this.onDisconnection(function(aid){
-		that.clients.removeClient(aid);	
+		that.clients.removeClient(aid);
+		gameInputManager.onDisconnection(aid);
 		that.clients.toString();
 	});
 

@@ -16,7 +16,7 @@ var table = {
   onThrowCard: function(cid){
     console.log('onThrowCard', cid);
     console.log(this);
-    return 'onThrowCard: '+cid;
+    return {ahaha: 'onThrowCard: '+cid};
   }  
 };
 var endpoint = new RPC.EndpointManager('http://localhost', table);

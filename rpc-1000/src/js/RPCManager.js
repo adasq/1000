@@ -1,6 +1,15 @@
 var _ = require('underscore');
 var q = require('q');
 
+function makeid(length){
+    var text = "";
+    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for( var i=0; i < (length || 5); i++ ){
+          text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+    return text;
+}
+
 var getParamsByFn = function(target){
     var FN_ARGS = /^function\s*[^\(]*\(\s*([^\)]*)\)/m;
     var text = target.toString();
@@ -24,44 +33,52 @@ var RPCManager = function(communicationManager){
   this.communicationManager= communicationManager;
   var that = this;
   this.promiseStack = [];
+  this.userRPCInteface = {};
 
-  if(!communicationManager)return;
   communicationManager.onMessage(function(msg){
-
-    var msgType = msg.type;
-    var msgObj = msg.data;
     var messageTypeBehavior = {
       response: function(obj){
-        that.promiseStack[0].resolve(obj);
-        that.promiseStack= [];
+        that.onResposneMessage(obj);
       },
       clients: function(obj){
-          that.rpcThis.clients= obj;
-          console.log('CLIENTS: ',obj);
+        that.onClientsMessage(obj);
       },
       message: function(obj){
-          var callback = that.getInputMethodByName(obj.handleMethod);
-          console.log('callback:',callback);
-          console.log('resposne:',obj);
-          var realArgs = _.map(callback.args, function(argName) {
-            return obj.args[argName];
-          });
-          // callback.fn
-          console.log('realArgs:',realArgs);
-          that.rpcThis.custom = obj;
-          var responseResult = callback.fn.apply(that.rpcThis, realArgs);       
-          communicationManager.send({
-            type: 'response',
-            data: responseResult
-          });
+        that.onMessageMessage(obj);
       }
     };
-
-    messageTypeBehavior[msgType](msgObj);
+    messageTypeBehavior[msg.header.type](msg);
   });
+};
 
+RPCManager.prototype.onResposneMessage = function(obj) {
+  var that= this;
+  that.promiseStack[0].resolve(obj.data);
+  that.promiseStack = [];  
 
 };
+RPCManager.prototype.onClientsMessage = function(obj) {
+   this.userRPCInteface.clients= obj.data;
+   console.table(obj.data);
+};
+RPCManager.prototype.onMessageMessage = function(obj) {
+  console.log('message received:', obj.data);
+  var that= this;
+  var inputMethodDescription = that.getInputMethodByName(obj.data.handleMethod);
+          var realArgs = _.map(inputMethodDescription.args, function(argName) {
+            return obj.data.args[argName];
+          });
+          var responseResult = inputMethodDescription.fn.apply(that.userRPCInteface, realArgs);       
+          that.communicationManager.send({
+            header: {
+              mid: obj.header.mid,
+              type: 'response',       
+              target: null
+            },
+            data: responseResult
+  });
+};
+
 
 RPCManager.prototype.getInputMethodByName = function(handleName){
   return _.find(this.inputTypeCallbacks, function(callback){
@@ -71,41 +88,42 @@ RPCManager.prototype.getInputMethodByName = function(handleName){
 
 
 RPCManager.prototype.prepareOutputResponses = function(){
-
 var that = this;
 
 var findTargetByType = function(type){
-  return _.find(that.rpcThis.clients, function(client){
+  return _.find(that.userRPCInteface.clients, function(client){
     return client.type === type;
   });
 };
 
 _.each(this.outputTypeCallbacks, function(callback){
   var targetType = callback.fn();
-  that.rpcThis[callback.name] = function(){
+  that.userRPCInteface[callback.name] = function(){
     var deferred = q.defer();
+    that.promiseStack.push(deferred);
     var target = findTargetByType(targetType);
-
     var targetNodeData = {
       args: _.object(callback.args, arguments),
       handleMethod: 'on'+callback.normalizedName
-    }
-
+    };
     that.communicationManager.send({
       data: targetNodeData,
-      type: 'message',       
-      target: target.aid}); 
-    that.promiseStack.push(deferred);
+      header: {
+        mid: makeid(10),
+        type: 'message',       
+        target: target.aid
+      }      
+    });     
     return deferred.promise;
   };
 });
 
 };
 
-RPCManager.prototype.prepare = function(callbacks){
+RPCManager.prototype.prepare = function(userRPCInteface){
 var callbacksInfo = [];
 
-_.each(callbacks, function(fn, name){
+_.each(userRPCInteface, function(fn, name){
   callbacksInfo.push({
     name: name,
     fn: fn,
@@ -114,12 +132,9 @@ _.each(callbacks, function(fn, name){
     args: getParamsByFn(fn.toString())
   });
 });
-
-this.rpcThis = callbacks;
-
+this.userRPCInteface = userRPCInteface;
 this.inputTypeCallbacks = getInputTypeCallbacks(callbacksInfo);
 this.outputTypeCallbacks = getOutputTypeCallbacks(callbacksInfo);
-
 };
 
 module.exports = RPCManager;

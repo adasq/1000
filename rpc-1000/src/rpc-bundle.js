@@ -32194,6 +32194,210 @@ module.exports=require(191)
 
 },{}],233:[function(require,module,exports){
 var _ = require('underscore');
+var q = require('q');
+
+function makeid(length){
+    var text = "";
+    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for( var i=0; i < (length || 5); i++ ){
+          text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+    return text;
+}
+
+var getParamsByFn = function(target){
+    var FN_ARGS = /^function\s*[^\(]*\(\s*([^\)]*)\)/m;
+    var text = target.toString();
+    var args = text.match(FN_ARGS)[1].split(',');
+    return args;
+};
+
+var getOutputTypeCallbacks= function(callbacks){
+  return _.filter(callbacks, function(cb){
+    return !cb.isOutputFn;
+  });  
+};
+var getInputTypeCallbacks= function(callbacks){
+  return _.filter(callbacks, function(cb){
+    return cb.isOutputFn;
+  });    
+};
+
+//============================================
+var RPCManager = function(communicationManager){
+  this.communicationManager= communicationManager;
+  var that = this;
+  this.promiseStack = [];
+  this.userRPCInteface = {};
+
+  communicationManager.onMessage(function(msg){
+    var messageTypeBehavior = {
+      response: function(obj){
+        that.onResposneMessage(obj);
+      },
+      clients: function(obj){
+        that.onClientsMessage(obj);
+      },
+      message: function(obj){
+        that.onMessageMessage(obj);
+      }
+    };
+    messageTypeBehavior[msg.header.type](msg);
+  });
+};
+
+RPCManager.prototype.onResposneMessage = function(obj) {
+  var that= this;
+  that.promiseStack[0].resolve(obj.data);
+  that.promiseStack = [];  
+
+};
+RPCManager.prototype.onClientsMessage = function(obj) {
+   this.userRPCInteface.clients= obj.data;
+   console.table(obj.data);
+};
+RPCManager.prototype.onMessageMessage = function(obj) {
+  console.log('message received:', obj.data);
+  var that= this;
+  var inputMethodDescription = that.getInputMethodByName(obj.data.handleMethod);
+          var realArgs = _.map(inputMethodDescription.args, function(argName) {
+            return obj.data.args[argName];
+          });
+          var responseResult = inputMethodDescription.fn.apply(that.userRPCInteface, realArgs);       
+          that.communicationManager.send({
+            header: {
+              mid: obj.header.mid,
+              type: 'response',       
+              target: null
+            },
+            data: responseResult
+  });
+};
+
+
+RPCManager.prototype.getInputMethodByName = function(handleName){
+  return _.find(this.inputTypeCallbacks, function(callback){
+    return handleName === callback.normalizedName;  
+  });
+};
+
+
+RPCManager.prototype.prepareOutputResponses = function(){
+var that = this;
+
+var findTargetByType = function(type){
+  return _.find(that.userRPCInteface.clients, function(client){
+    return client.type === type;
+  });
+};
+
+_.each(this.outputTypeCallbacks, function(callback){
+  var targetType = callback.fn();
+  that.userRPCInteface[callback.name] = function(){
+    var deferred = q.defer();
+    that.promiseStack.push(deferred);
+    var target = findTargetByType(targetType);
+    var targetNodeData = {
+      args: _.object(callback.args, arguments),
+      handleMethod: 'on'+callback.normalizedName
+    };
+    that.communicationManager.send({
+      data: targetNodeData,
+      header: {
+        mid: makeid(10),
+        type: 'message',       
+        target: target.aid
+      }      
+    });     
+    return deferred.promise;
+  };
+});
+
+};
+
+RPCManager.prototype.prepare = function(userRPCInteface){
+var callbacksInfo = [];
+
+_.each(userRPCInteface, function(fn, name){
+  callbacksInfo.push({
+    name: name,
+    fn: fn,
+    normalizedName: name.toLowerCase(),
+    isOutputFn: !!(name.toLowerCase().substr(0,2) === "on"),
+    args: getParamsByFn(fn.toString())
+  });
+});
+this.userRPCInteface = userRPCInteface;
+this.inputTypeCallbacks = getInputTypeCallbacks(callbacksInfo);
+this.outputTypeCallbacks = getOutputTypeCallbacks(callbacksInfo);
+};
+
+module.exports = RPCManager;
+
+},{"q":145,"underscore":232}],234:[function(require,module,exports){
+var _ = require('underscore');
+
+function makeid(){
+    var text = "";
+    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for( var i=0; i < 5; i++ ){
+          text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+    return text;
+}
+
+var ClientCommunicationManager = function(socket){
+  var that = this;
+  this.aid = sessionStorage['aid'] || null;
+  //syn
+  
+  socket.on('ACK', function () {
+    if(that.aid){
+      //reauthorize    
+      that.authorize();
+    }else{
+      //authorie
+      that.aid= sessionStorage['aid']= makeid();
+    }
+    socket.emit('CONNECT', {aid: that.aid});
+  });
+  this.onMessage = function(fn) {
+    socket.on('message', fn);
+  };
+  
+
+  this.authorize = function(data){
+    if(this.aid){ 
+      socket.emit('AUTHORIZE', _.extend({aid: that.aid}, data));
+    }
+  };
+  this.send = function(msg){
+    socket.emit('message', msg);
+  };
+};
+
+module.exports = ClientCommunicationManager
+},{"underscore":232}],235:[function(require,module,exports){
+var 
+	RPCManager = require('../RPCManager.js'),
+	ClientCommunicationManager = require('./ClientCommunicationManager.js'),
+	_ = require('underscore');
+
+
+var EndpointManager = function(url, inputOutputAPIMethods){
+  var socket = require('socket.io-client')(url);
+  this.clientCommunicationManager = new ClientCommunicationManager(socket);
+
+  this.rpcManager = new RPCManager(this.clientCommunicationManager);
+  this.rpcManager.prepare(inputOutputAPIMethods);
+  this.rpcManager.prepareOutputResponses();
+
+};
+
+
+module.exports = EndpointManager;
+},{"../RPCManager.js":233,"./ClientCommunicationManager.js":234,"socket.io-client":146,"underscore":232}],236:[function(require,module,exports){
+var _ = require('underscore');
 
 	var Clients = function() {
 		var 
@@ -32292,7 +32496,105 @@ var _ = require('underscore');
 	module.exports = Clients;
 	
 
-},{"underscore":232}],234:[function(require,module,exports){
+},{"underscore":232}],237:[function(require,module,exports){
+var SocketManager = require('./socketManager.js');
+var _ = require('underscore');
+
+
+
+var MessagesBuffer = function(){
+
+	var buffer = [];
+
+	this.push= function(source, target){
+		buffer.push({
+			source: source,
+			target: target,
+			time: +new Date()
+		});
+	};
+
+	//this.get
+
+
+};
+
+function makeid(length){
+    var text = "";
+    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for( var i=0; i < (length || 5); i++ ){
+          text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+    return text;
+}
+
+
+var ProxyManager = function(server) {
+	this.responseQueue = [];
+	var that=this;
+
+	var socketManager = new SocketManager(server);
+	var ServerCommunicationManager = require('./ServerCommunicationManager.js')(socketManager);
+
+
+
+var gameOutputManager = {
+	send: function(aid, msg){}
+};
+var gameInputManager = {
+	sendClients: function(){
+		var clients = this.clients.getClients();
+		_.each(clients, function(client){
+			gameOutputManager.send(client.aid, {header: {type: 'clients'}, data: clients })
+		});	
+	},
+	onPlayerReconnected: function(aid){
+		console.log('!!!!!!!!!! onPlayerReconnected ', aid);	 
+		this.sendClients();
+	},	
+	onPlayerConnected: function(aid){
+		console.log('!!!!!!!!!! onPlayerConnected ', aid);
+		this.sendClients();
+	},
+	onDisconnection: function(aid){
+		console.log('!!!!!!!!!! onDisconnection ', aid);
+		this.sendClients();
+	},	
+	onMessage: function(aid, msg) {
+		console.log('!!!!!!!!!! onMessage ', aid, msg);
+
+		if(msg.header.type && msg.header.type === 'message'){
+			var mid = makeid(10);
+			var message = {
+				source: aid,
+				target: msg.header.target,
+				mid: mid
+			};
+			that.responseQueue.push(message);
+			console.log('pushing to queue', message);
+			gameOutputManager.send(msg.header.target, {header: {mid: mid, type: 'message'}, data: msg.data })
+		}else if(msg.header.type && msg.header.type === 'response'){
+
+			var messageId = msg.header.mid;
+			
+			var responseTarget = that.responseQueue[0]; 
+			console.log('response', msg.header.mid, that.responseQueue);
+			gameOutputManager.send(responseTarget.source, {header: {mid: responseTarget.mid, type: 'response'}, data: msg.data })
+		}else{
+			gameOutputManager.send(aid, {header: {mid: mid, type: 'response'}, data: {r: 'ly'} })
+		}			
+	}	
+};
+
+(new ServerCommunicationManager(gameInputManager, gameOutputManager));
+
+
+
+
+};
+
+module.exports = ProxyManager;
+},{"./ServerCommunicationManager.js":238,"./socketManager.js":239,"underscore":232}],238:[function(require,module,exports){
 
 var _ = require('underscore'),
 Clients = require('./Clients.js');
@@ -32329,7 +32631,6 @@ var CommunicationManager = function(gameInputManager, gameOutputManager){
 	});
 //----------------------------------------
 	this.onAuthorize(function(aid, data){
-		console.log('onAuthorize::::', arguments)
 		var client = that.clients.getClientByAid(aid);
 		if(!client){
 			return;
@@ -32343,7 +32644,8 @@ var CommunicationManager = function(gameInputManager, gameOutputManager){
 	});
 //----------------------------------------
 	this.onDisconnection(function(aid){
-		that.clients.removeClient(aid);	
+		that.clients.removeClient(aid);
+		gameInputManager.onDisconnection(aid);
 		that.clients.toString();
 	});
 
@@ -32360,276 +32662,7 @@ return CommunicationManager;
 	
 };
 
-},{"./Clients.js":233,"underscore":232}],235:[function(require,module,exports){
-var RPCManager = require('./RPCManager.js');
-var _ = require('underscore');
-
-function makeid(){
-    var text = "";
-    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    for( var i=0; i < 5; i++ ){
-          text += possible.charAt(Math.floor(Math.random() * possible.length));
-        }
-    return text;
-}
-
-var CommunicationManager = function(socket){
-  var that = this;
-  this.aid = sessionStorage['aid'] || null;
-  //syn
-  
-  socket.on('ACK', function () {
-    if(that.aid){
-      //reauthorize    
-      that.authorize();
-    }else{
-      //authorie
-      that.aid= sessionStorage['aid']= makeid();
-    }
-    socket.emit('CONNECT', {aid: that.aid});
-  });
-  this.onMessage = function(fn) {
-    socket.on('message', fn);
-  };
-  
-
-  this.authorize = function(data){
-    if(this.aid){ 
-      socket.emit('AUTHORIZE', _.extend({aid: that.aid}, data));
-    }
-  };
-  this.send = function(msg){
-    socket.emit('message', msg);
-  };
-};
-//===================================================
-
-var EndpointManager = function(url, inputOutputAPIMethods){
-  var socket = require('socket.io-client')(url);
-  var cm = new CommunicationManager(socket);
-
-  this.authorize = function(username) {
-    cm.authorize(username);
-  };
-
-  this.send = function(msg) {
-    cm.send(msg);
-  };
-
-  this.onMessage = function(callback) {
-   cm.onMessage(callback);
-  };
-
-  this.rpcManager = new RPCManager(this);
-  this.rpcManager.prepare(inputOutputAPIMethods);
-  this.rpcManager.prepareOutputResponses();
-
-};
-
-
-module.exports = EndpointManager;
-},{"./RPCManager.js":237,"socket.io-client":146,"underscore":232}],236:[function(require,module,exports){
-var SocketManager = require('./socketManager.js');
-var _ = require('underscore');
-
-var ProxyManager = function(server) {
-	this.responseQueue = [];
-	var that=this;
-
-	var socketManager = new SocketManager(server);
-	var CommunicationManager = require('./CommunicationManager.js')(socketManager);
-
-var gameOutputManager = {
-	send: function(aid, msg){}
-};
-
-var gameInputManager = {	
-	onPlayerReconnected: function(aid){
-		console.log('!!!!!!!!!! onPlayerReconnected ', aid);	 
-		var clients = this.clients.getClients();
-		_.each(clients, function(client){
-			gameOutputManager.send(client.aid, {type: 'clients', data: clients })
-		});	
-	},	
-	onPlayerConnected: function(aid){
-		console.log('!!!!!!!!!! onPlayerConnected ', aid);
-	},
-	onMessage: function(aid, msg) {
-		console.log('!!!!!!!!!! onMessage ', aid, msg);		
-		if(msg.type && msg.type === 'message'){
-			that.responseQueue.push({
-				source: aid,
-				target: msg.target
-			});
-			gameOutputManager.send(msg.target, {type: 'message', data: msg.data })
-		}else if(msg.type && msg.type === 'response'){
-			var responseTarget = that.responseQueue[0].source; 
-			gameOutputManager.send(responseTarget, {type: 'response', data: msg.data })
-		}else{
-			gameOutputManager.send(aid, {type: 'response', data: {r: 'ly'} })
-		}
-
-			
-	}	
-};
-
-(new CommunicationManager(gameInputManager, gameOutputManager));
-
-
-
-
-};
-
-module.exports = ProxyManager;
-},{"./CommunicationManager.js":234,"./socketManager.js":239,"underscore":232}],237:[function(require,module,exports){
-var _ = require('underscore');
-var q = require('q');
-
-var getParamsByFn = function(target){
-    var FN_ARGS = /^function\s*[^\(]*\(\s*([^\)]*)\)/m;
-    var text = target.toString();
-    var args = text.match(FN_ARGS)[1].split(',');
-    return args;
-};
-
-var getOutputTypeCallbacks= function(callbacks){
-  return _.filter(callbacks, function(cb){
-    return !cb.isOutputFn;
-  });  
-};
-var getInputTypeCallbacks= function(callbacks){
-  return _.filter(callbacks, function(cb){
-    return cb.isOutputFn;
-  });    
-};
-
-//============================================
-var RPCManager = function(communicationManager){
-  this.communicationManager= communicationManager;
-  var that = this;
-  this.promiseStack = [];
-
-  if(!communicationManager)return;
-  communicationManager.onMessage(function(msg){
-
-    var msgType = msg.type;
-    var msgObj = msg.data;
-    var messageTypeBehavior = {
-      response: function(obj){
-        that.promiseStack[0].resolve(obj);
-        that.promiseStack= [];
-      },
-      clients: function(obj){
-          that.rpcThis.clients= obj;
-          console.log('CLIENTS: ',obj);
-      },
-      message: function(obj){
-          var callback = that.getInputMethodByName(obj.handleMethod);
-          console.log('callback:',callback);
-          console.log('resposne:',obj);
-          var realArgs = _.map(callback.args, function(argName) {
-            return obj.args[argName];
-          });
-          // callback.fn
-          console.log('realArgs:',realArgs);
-          that.rpcThis.custom = obj;
-          var responseResult = callback.fn.apply(that.rpcThis, realArgs);       
-          communicationManager.send({
-            type: 'response',
-            data: responseResult
-          });
-      }
-    };
-
-    messageTypeBehavior[msgType](msgObj);
-  });
-
-
-};
-
-RPCManager.prototype.getInputMethodByName = function(handleName){
-  return _.find(this.inputTypeCallbacks, function(callback){
-    return handleName === callback.normalizedName;  
-  });
-};
-
-
-RPCManager.prototype.prepareOutputResponses = function(){
-
-var that = this;
-
-var findTargetByType = function(type){
-  return _.find(that.rpcThis.clients, function(client){
-    return client.type === type;
-  });
-};
-
-_.each(this.outputTypeCallbacks, function(callback){
-  var targetType = callback.fn();
-  that.rpcThis[callback.name] = function(){
-    var deferred = q.defer();
-    var target = findTargetByType(targetType);
-
-    var targetNodeData = {
-      args: _.object(callback.args, arguments),
-      handleMethod: 'on'+callback.normalizedName
-    }
-
-    that.communicationManager.send({
-      data: targetNodeData,
-      type: 'message',       
-      target: target.aid}); 
-    that.promiseStack.push(deferred);
-    return deferred.promise;
-  };
-});
-
-};
-
-RPCManager.prototype.prepare = function(callbacks){
-var callbacksInfo = [];
-
-_.each(callbacks, function(fn, name){
-  callbacksInfo.push({
-    name: name,
-    fn: fn,
-    normalizedName: name.toLowerCase(),
-    isOutputFn: !!(name.toLowerCase().substr(0,2) === "on"),
-    args: getParamsByFn(fn.toString())
-  });
-});
-
-this.rpcThis = callbacks;
-
-this.inputTypeCallbacks = getInputTypeCallbacks(callbacksInfo);
-this.outputTypeCallbacks = getOutputTypeCallbacks(callbacksInfo);
-
-};
-
-module.exports = RPCManager;
-
-},{"q":145,"underscore":232}],238:[function(require,module,exports){
-var ProxyManager = require('./ProxyManager.js');
-var EndpointManager = require('./EndpointManager.js');
-
-
-console.log('RPC loaded');
-
-var publicAPI = {
-	ProxyManager: ProxyManager,  
-	EndpointManager: EndpointManager
-};
-
-if(typeof window !== 'undefined'){
-window.RPC = publicAPI;
-}
-module.exports = publicAPI;
-
-
-
-
-
-},{"./EndpointManager.js":235,"./ProxyManager.js":236}],239:[function(require,module,exports){
+},{"./Clients.js":236,"underscore":232}],239:[function(require,module,exports){
 var
 _ = require('underscore');
 
@@ -32718,4 +32751,25 @@ SocketManager.prototype.onDisconnection = function(fn){
 };
 
 module.exports = SocketManager;
-},{"socket.io":194,"underscore":232}]},{},[238]);
+},{"socket.io":194,"underscore":232}],240:[function(require,module,exports){
+var ProxyManager = require('./proxy/ProxyManager.js');
+var EndpointManager = require('./endpoint/EndpointManager.js');
+
+
+console.log('RPC loaded');
+
+var publicAPI = {
+	ProxyManager: ProxyManager,  
+	EndpointManager: EndpointManager
+};
+
+if(typeof window !== 'undefined'){
+window.RPC = publicAPI;
+}
+module.exports = publicAPI;
+
+
+
+
+
+},{"./endpoint/EndpointManager.js":235,"./proxy/ProxyManager.js":237}]},{},[240]);

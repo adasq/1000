@@ -1,5 +1,5 @@
-var ProxyManager = require('./ProxyManager.js');
-var EndpointManager = require('./EndpointManager.js');
+var ProxyManager = require('./proxy/ProxyManager.js');
+var EndpointManager = require('./endpoint/EndpointManager.js');
 
 
 console.log('RPC loaded');
