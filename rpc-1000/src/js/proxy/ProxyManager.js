@@ -1,24 +1,10 @@
 var SocketManager = require('./socketManager.js');
 var _ = require('underscore');
+var MessagesBuffer = require('./MessagesBuffer.js');
 
 
 
-var MessagesBuffer = function(){
 
-	var buffer = [];
-
-	this.push= function(source, target){
-		buffer.push({
-			source: source,
-			target: target,
-			time: +new Date()
-		});
-	};
-
-	//this.get
-
-
-};
 
 function makeid(length){
     var text = "";
@@ -33,7 +19,7 @@ function makeid(length){
 var ProxyManager = function(server) {
 	this.responseQueue = [];
 	var that=this;
-
+	this.msgBuffer = new MessagesBuffer();
 	var socketManager = new SocketManager(server);
 	var ServerCommunicationManager = require('./ServerCommunicationManager.js')(socketManager);
 
@@ -62,36 +48,45 @@ var gameInputManager = {
 		this.sendClients();
 	},	
 	onMessage: function(aid, msg) {
-		console.log('!!!!!!!!!! onMessage ', aid, msg);
-
-		if(msg.header.type && msg.header.type === 'message'){
-			var mid = makeid(10);
-			var message = {
-				source: aid,
-				target: msg.header.target,
-				mid: mid
-			};
-			that.responseQueue.push(message);
-			console.log('pushing to queue', message);
-			gameOutputManager.send(msg.header.target, {header: {mid: mid, type: 'message'}, data: msg.data })
-		}else if(msg.header.type && msg.header.type === 'response'){
-
-			var messageId = msg.header.mid;
-			
-			var responseTarget = that.responseQueue[0]; 
-			console.log('response', msg.header.mid, that.responseQueue);
-			gameOutputManager.send(responseTarget.source, {header: {mid: responseTarget.mid, type: 'response'}, data: msg.data })
-		}else{
-			gameOutputManager.send(aid, {header: {mid: mid, type: 'response'}, data: {r: 'ly'} })
-		}			
+		console.log('================ message RECEIVED', aid, msg);
+		var messageTypeBehavior = {
+			message: function(){
+				that.onMessageMessage(aid, msg);
+			},
+			response: function(){
+				that.onResponseMessage(aid, msg);
+			}
+		};
+		var handleMethod = messageTypeBehavior[msg.header.type];
+		if(handleMethod){
+			handleMethod();
+		}
 	}	
 };
 
+this.gameOutputManager = gameOutputManager;
+this.gameInputManager = gameInputManager;
 (new ServerCommunicationManager(gameInputManager, gameOutputManager));
-
-
-
-
 };
+
+
+ProxyManager.prototype.onMessageMessage = function(aid, msg){
+			var messageId = makeid(10);
+			var messageSource = aid;
+			var messageTarget = msg.header.target;
+			this.msgBuffer.insert(messageSource, messageTarget, messageId);
+			console.log(messageSource + " --> "+messageTarget);
+			console.log(msg);
+			this.gameOutputManager.send(messageTarget, {header: {source: messageSource, mid: messageId, type: 'message'}, data: msg.data })
+};
+
+ProxyManager.prototype.onResponseMessage = function(aid, msg){			
+			var messageId = msg.header.mid;			
+			var responseTarget = this.msgBuffer.getByMid(messageId); 
+			console.log(responseTarget.source + " <-- "+aid);
+			console.log(msg);
+			this.gameOutputManager.send(responseTarget.source, {header: {mid: responseTarget.mid, type: 'response'}, data: msg.data })
+};
+
 
 module.exports = ProxyManager;

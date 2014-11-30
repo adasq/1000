@@ -10,12 +10,20 @@
 var table = {
   // output ============================
   cardToClient: function(cid){
-    return 'CLIENT';
+    return {
+      type: 'CLIENT',
+      unique: false
+    };
   },  
   //input ==============================
   onThrowCard: function(cid){
     console.log('onThrowCard', cid);
-    console.log(this);
+    var that = this;
+    setTimeout(function(){
+      that.cardToClient('adam' ,'cardToClient').then(function(resposne){
+        console.log('response', resposne);
+      });
+    }, 2000);
     return {ahaha: 'onThrowCard: '+cid};
   }  
 };
@@ -28,6 +36,11 @@ var endpoint = new RPC.EndpointManager('http://localhost', table);
 
 <body>
   table
+<h1 id="aid"></h1>
+
+<script type="text/javascript">
+  document.getElementById('aid').innerHTML = sessionStorage['aid'];
+</script>
 
 </body>
 </html>

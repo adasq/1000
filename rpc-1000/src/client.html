@@ -9,23 +9,29 @@
 <script>
 
 var klient = {
-  // output ============================
+  // OUTPUT type method
   throwCard: function(cid){
-    return 'TABLE';
+    //Target Description Object
+    return {
+      type: 'TABLE', //type of target
+      unique: true // is there is only one node of above type, set to TRUE, otherwise FALSE
+    };
   },  
-  //input ==============================
+  //INPUT type method
   onCardToClient: function(cid){
-    //console.log(this);
-    this.throwCard('throwCard').then(function(result){
-      console.log(result);
-    });
+    // this.source contains source aid:
+    console.log('message from: ', this.source); 
+    console.log('onCardToClient called with args:', JSON.stringify(arguments)+ ' by ');
+    //use your OUTPUT method to call methods of end node
+    //those methods returns a promise of target response
+    // this.throwCard('throwCard').then(function(result){
+    //   console.log(result);
+    // }); 
+    //you should return sth, in order to notify the source about possible issues
+    return {a: 'hahaha'}; 
   }  
 };
-
 var endpoint = new RPC.EndpointManager('http://localhost', klient);
-
-
-
 </script>
 
 
@@ -33,6 +39,11 @@ var endpoint = new RPC.EndpointManager('http://localhost', klient);
 
 <body>
   klient
+
+  <h1 id="aid"></h1>
+  <script type="text/javascript">
+  document.getElementById('aid').innerHTML = sessionStorage['aid'];
+</script>
 
 </body>
 </html>
