@@ -7,7 +7,12 @@ var Clients = function(){
 	};
 	this.get= function(){
 		return clients;
-	}
+	};
+	this.getClientByAid = function(aid){
+		return _.find(clients, function(client){
+			return client.aid === aid;
+		});
+	};
 	this.getClientByType = function(type){
 		return _.find(clients, function(client){
 			return client.type.toLowerCase() === type.toLowerCase();

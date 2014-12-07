@@ -21,13 +21,14 @@ var klient = {
   onCardToClient: function(cid){
     // this.source contains source aid:
     console.log('message from: ', this.source); 
-    console.log('onCardToClient called with args:', JSON.stringify(arguments)+ ' by ');
+    console.log('onCardToClient called with args:', cid+ ' by ');
     //use your OUTPUT method to call methods of end node
     //those methods returns a promise of target response
     // this.throwCard('throwCard').then(function(result){
     //   console.log(result);
     // }); 
     //you should return sth, in order to notify the source about possible issues
+    console.log(this.source, this.clients.getClientByAid(this.source));
     return {a: 'hahaha'}; 
   }  
 };
